@@ -1,10 +1,11 @@
 <?php
 
 use App\Events\SinoptikDataWrittenToExcel;
+use App\Http\Controllers\TafVerificationController;
 use App\Models\User;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Route;
 use Illuminate\Support\Facades\File;
+use Illuminate\Support\Facades\Route;
 
 Route::get('/', function () {
     return response('');
@@ -106,3 +107,7 @@ Route::get('/client/backups/download-latest', function (Request $request) {
         ['Content-Type' => 'application/zip']
     );
 });
+
+// Route Baru: Verifikasi TAFOR
+Route::get('/taf-verification', [TafVerificationController::class, 'index'])->name('taf.index');
+Route::post('/taf-verification/process', [TafVerificationController::class, 'process'])->name('taf.process');
