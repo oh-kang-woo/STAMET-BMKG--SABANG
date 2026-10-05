@@ -322,6 +322,14 @@ class SinoptikDataHelper
 
         $bmkgsoftId = setting('bmkgsoft_id') ?? setting('station_bmkgsoft_id') ?? 1;
 
+        // Validasi jenis awan rendah untuk kolom 1 (kiri) dan kolom 2 (kanan)
+        $type1 = (string) ($sinoptikData['cloud_low_type_1'] ?? $sinoptikData['cloud_low_type_cl'] ?? '');
+        $type2 = (string) ($sinoptikData['cloud_low_type_2'] ?? '');
+
+        // Sudut elevasi (ec) dan Arah sebenarnya (da) hanya berlaku jika jenis awannya Cu (8) atau Cb (9)
+        $isCuOrCb1 = in_array($type1, ['8', '9'], true);
+        $isCuOrCb2 = in_array($type2, ['8', '9'], true);
+
         return [
             'data_timestamp'                      => $timestampFormat,
             'bmkgsoft_id'                         => (int) $bmkgsoftId,
@@ -392,10 +400,11 @@ class SinoptikDataHelper
             'cloud_high_dir_1'                    => $toInt($sinoptikData['cloud_high_dir_1'] ?? null),
             'cloud_high_dir_2'                    => $toInt($sinoptikData['cloud_high_dir_2'] ?? null),
 
-            'cloud_elevation_angle_ec_1'          => $toInt($sinoptikData['cloud_elevation_angle_ec_1'] ?? null),
-            'cloud_elevation_angle_ec_2'          => $toInt($sinoptikData['cloud_elevation_angle_ec_2'] ?? null),
-            'cloud_low_dir_true_da_1'             => $toInt($sinoptikData['cloud_low_dir_true_da_1'] ?? null),
-            'cloud_low_dir_true_da_2'             => $toInt($sinoptikData['cloud_low_dir_true_da_2'] ?? null),
+            // Sudut Elevasi dan Arah Sebenarnya (Hanya terisi jika awan Cu/Cb pada kolom masing-masing)
+            'cloud_elevation_angle_ec_1'          => $isCuOrCb1 ? $toInt($sinoptikData['cloud_elevation_angle_ec_1'] ?? null) : null,
+            'cloud_elevation_angle_ec_2'          => $isCuOrCb2 ? $toInt($sinoptikData['cloud_elevation_angle_ec_2'] ?? null) : null,
+            'cloud_low_dir_true_da_1'             => $isCuOrCb1 ? $toInt($sinoptikData['cloud_low_dir_true_da_1'] ?? null) : null,
+            'cloud_low_dir_true_da_2'             => $isCuOrCb2 ? $toInt($sinoptikData['cloud_low_dir_true_da_2'] ?? null) : null,
             'cloud_vertical_vis'                  => $toInt($sinoptikData['cloud_vertical_vis'] ?? null),
 
             'solar_rad_24h_jcm2_f24'              => $toFloat($sinoptikData['solar_rad_24h_jcm2_f24'] ?? null),
