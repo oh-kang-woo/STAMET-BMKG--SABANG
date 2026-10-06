@@ -14,6 +14,7 @@
         "laravel/reverb": "^1.0",
         "laravel/sanctum": "^4.0",
         "laravel/tinker": "^2.9",
+        "phpoffice/phpspreadsheet": "*",
         "rupadana/filament-api-service": "^3.4",
         "saade/filament-laravel-log": "^3.2",
         "spatie/laravel-permission": "^6.0",
@@ -80,6 +81,9 @@
         "allow-plugins": {
             "pestphp/pest-plugin": true,
             "php-http/discovery": true
+        },
+        "platform": {
+            "php": "8.4.0"
         }
     },
     "minimum-stability": "dev",

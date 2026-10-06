@@ -4,7 +4,6 @@ namespace App\Services;
 
 use Carbon\Carbon;
 use PhpOffice\PhpSpreadsheet\IOFactory;
-use Illuminate\Support\Facades\Storage;
 
 class TafReportExcelService
 {
@@ -19,13 +18,26 @@ class TafReportExcelService
         $spreadsheet = IOFactory::load($templatePath);
         $daysInMonth = $start->daysInMonth;
 
-        $baseSheet = $spreadsheet->getSheetByName('1');
-        for ($day = 2; $day <= $daysInMonth; $day++) {
-            $cloned = clone $baseSheet;
-            $cloned->setTitle((string)$day);
-            $spreadsheet->addSheet($cloned);
+        // 1. Hapus sheet tanggal yang melebihi jumlah hari dalam bulan tersebut (misal: hapus tanggal 31 di bulan September)
+        for ($day = $daysInMonth + 1; $day <= 31; $day++) {
+            $sheetToRemove = $spreadsheet->getSheetByName((string)$day);
+            if ($sheetToRemove !== null) {
+                $sheetIndex = $spreadsheet->getIndex($sheetToRemove);
+                $spreadsheet->removeSheetByIndex($sheetIndex);
+            }
         }
 
+        // 2. Buat kloning sheet hanya jika sheet tanggal tersebut belum ada di template
+        $baseSheet = $spreadsheet->getSheetByName('1');
+        for ($day = 2; $day <= $daysInMonth; $day++) {
+            if ($spreadsheet->getSheetByName((string)$day) === null && $baseSheet !== null) {
+                $cloned = clone $baseSheet;
+                $cloned->setTitle((string)$day);
+                $spreadsheet->addSheet($cloned);
+            }
+        }
+
+        // 3. Update judul pada sheet rekap
         $recapSheet = $spreadsheet->getSheetByName('rekap 1 bulan');
         if ($recapSheet) {
             $recapSheet->setCellValue('A2', "VERIFIKASI TAFOR BULAN " . strtoupper($start->translatedFormat('F Y')) . " - WITN MAIMUN SALEH SABANG");
