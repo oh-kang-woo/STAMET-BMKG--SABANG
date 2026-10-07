@@ -12,56 +12,38 @@ use PhpOffice\PhpSpreadsheet\Worksheet\Worksheet;
 
 class TafReportExcelService
 {
-    protected TafParserService $parser;
-
-    public function __construct(TafParserService $parser)
-    {
-        $this->parser = $parser;
-    }
-
     /**
-     * Entry point yang dipanggil oleh VerifyTafPage.php
+     * Entry point utama yang dipanggil oleh VerifyTafPage.php
      */
     public function generate(Carbon $start, array $tafs, array $observations): string
     {
-        // Cari lokasi file template di storage/app/templates/
+        // Cari lokasi file template
         $templatePath = storage_path('app/templates/Verifikasi_Taf.xlsx');
         if (!file_exists($templatePath)) {
             $templatePath = base_path('Template Verif TAF.xlsx');
         }
 
         if (!file_exists($templatePath)) {
-            throw new \Exception("File template verifikasi TAF tidak ditemukan.");
+            throw new \Exception("File template verifikasi TAF 'Verifikasi_Taf.xlsx' atau 'Template Verif TAF.xlsx' tidak ditemukan.");
         }
 
         $spreadsheet = IOFactory::load($templatePath);
-        
+
         $year = $start->year;
         $month = $start->month;
         $daysInMonth = $start->daysInMonth;
 
-        // 1. Parse seluruh string TAF dan Observation
-        $tafList = [];
-        foreach ($tafs as $raw) {
-            $parsed = $this->parser->parseTaf($raw, $start->toDateTime());
-            if ($parsed) {
-                $tafList[] = $parsed;
-            }
-        }
-
-        $obsList = [];
-        foreach ($observations as $raw) {
-            $parsed = $this->parser->parseObservation($raw, $start->toDateTime());
-            if ($parsed) {
-                $obsList[] = $parsed;
-            }
-        }
+        // 1. Data dari BmkgAviationApiService sudah berupa Objek TafData dan ObservationData
+        // Jadi kita bisa langsung menggunakannya tanpa perlu di-parse ulang.
+        $tafList = $tafs;
+        $obsList = $observations;
 
         // 2. Hapus sheet tanggal yang melebihi jumlah hari dalam bulan tersebut
         for ($day = $daysInMonth + 1; $day <= 31; $day++) {
             $sheetName = (string)$day;
-            if ($spreadsheet->sheetExists($sheetName)) {
-                $sheetIndex = $spreadsheet->getIndex($spreadsheet->getSheetByName($sheetName));
+            $sheetToRemove = $spreadsheet->getSheetByName($sheetName);
+            if ($sheetToRemove !== null) {
+                $sheetIndex = $spreadsheet->getIndex($sheetToRemove);
                 $spreadsheet->removeSheetByIndex($sheetIndex);
             }
         }
@@ -69,22 +51,22 @@ class TafReportExcelService
         // 3. Isikan data verifikasi harian (Sheet 1 s.d. 28/30/31)
         for ($day = 1; $day <= $daysInMonth; $day++) {
             $sheetName = (string)$day;
-            if ($spreadsheet->sheetExists($sheetName)) {
-                $sheet = $spreadsheet->getSheetByName($sheetName);
+            $sheet = $spreadsheet->getSheetByName($sheetName);
+            if ($sheet !== null) {
                 $this->processDaySheet($sheet, $year, $month, $day, $tafList, $obsList);
             }
         }
 
         // 4. Update Judul pada Sheet "rekap 1 bulan"
-        if ($spreadsheet->sheetExists('rekap 1 bulan')) {
-            $rekapSheet = $spreadsheet->getSheetByName('rekap 1 bulan');
+        $rekapSheet = $spreadsheet->getSheetByName('rekap 1 bulan');
+        if ($rekapSheet !== null) {
             $rekapSheet->setCellValue(
                 'A2',
                 "VERIFIKASI TAFOR BULAN " . strtoupper($start->translatedFormat('F Y')) . " - WITN MAIMUN SALEH SABANG"
             );
         }
 
-        // 5. Simpan file ke disk public storage
+        // 5. Simpan file ke storage public
         $fileName = 'Verifikasi_TAF_' . $start->format('Y_m') . '.xlsx';
         $outputPath = storage_path('app/public/' . $fileName);
 
@@ -106,7 +88,10 @@ class TafReportExcelService
         array $tafList,
         array $obsList
     ): void {
-        $targetBlocks = [0, 6, 12, 18]; // UTC Hours
+        $sheet->setCellValue('B3', 'BULAN : ' . sprintf('%02d', $month));
+        $sheet->setCellValue('E3', 'TAHUN : ' . $year);
+
+        $targetBlocks = [0, 6, 12, 18]; 
         
         foreach ($targetBlocks as $index => $targetHour) {
             $targetTime = new DateTime(
@@ -138,16 +123,13 @@ class TafReportExcelService
     {
         foreach ($obsList as $obs) {
             $diff = abs($obs->at->getTimestamp() - $targetTime->getTimestamp());
-            if ($diff <= 1800) { // Toleransi 30 menit
+            if ($diff <= 1800) {
                 return $obs;
             }
         }
         return null;
     }
 
-    /**
-     * Evaluasi 7 Parameter SOP: A, B1, B2, C, D, E, F
-     */
     protected function evaluateSop(TafData $taf, ObservationData $obs, DateTime $targetTime): array
     {
         $group = $taf->groups[0];
@@ -160,7 +142,6 @@ class TafReportExcelService
         $e = $group->condition;
         $a = $obs->condition;
 
-        // A. Arah Angin (Delta <= 60 derajat atau kecepatan < 10 kt)
         $windDirOk = 0;
         if ($e->windDir !== null && $a->windDir !== null) {
             $delta = abs($e->windDir - $a->windDir);
@@ -170,22 +151,12 @@ class TafReportExcelService
             }
         }
 
-        // B1. Kecepatan Angin (Selisih <= 10 kt)
         $windSpdOk = ($e->windSpeed !== null && $a->windSpeed !== null && abs($e->windSpeed - $a->windSpeed) <= 10) ? 1 : 0;
-
-        // B2. Gust
         $gustOk = ($e->gust === $a->gust) ? 1 : 0;
-
-        // C. Jarak Pandang (Visibility Class)
         $visOk = ($e->visibility !== null && $a->visibility !== null && $this->visClass($e->visibility) === $this->visClass($a->visibility)) ? 1 : 0;
-
-        // D. Presipitasi / Cuaca
         $precipOk = ($e->precipCode === $a->precipCode || ($e->precipCode === 'NONE' && $a->precipCode === 'NONE')) ? 1 : 0;
-
-        // E. Jumlah Awan
         $cloudOk = ($e->cloud === $a->cloud) ? 1 : 0;
 
-        // F. Tinggi Dasar Awan / Ceiling
         $ceilingOk = 0;
         if ($e->ceilingFt !== null && $a->ceilingFt !== null) {
             if ($e->ceilingFt < 1000) {
