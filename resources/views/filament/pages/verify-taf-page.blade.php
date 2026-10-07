@@ -36,22 +36,26 @@
             $summary = $this->realtimeData['summary'];
             $rows = $this->realtimeData['rows'];
 
-            // Map data per jam (00-23 UTC) untuk Panel Matriks Monitoring
+            // Map data per jam (00-23 UTC) dengan pengecekan Null-Safe
             $hourlyStatus = [];
             for ($h = 0; $h < 24; $h++) {
                 $hStr = sprintf('%02d', $h);
                 $slot00 = null;
                 $slot30 = null;
+
                 foreach ($rows as $r) {
                     if (str_starts_with($r['time'], $hStr . ':00')) $slot00 = $r;
                     if (str_starts_with($r['time'], $hStr . ':30')) $slot30 = $r;
                 }
                 
-                $hasTaf = ($slot00 && $slot00['taf_raw'] !== 'Data TAF Belum Tersedia') || ($slot30 && $slot30['taf_raw'] !== 'Data TAF Belum Tersedia');
-                $hasMetar = ($slot00 && $slot00['metar_raw'] !== 'Data METAR Belum Tersedia') || ($slot30 && $slot30['metar_raw'] !== 'Data METAR Belum Tersedia');
+                $hasTaf = ($slot00 && ($slot00['taf_raw'] ?? '') !== 'Data TAF Belum Tersedia') 
+                       || ($slot30 && ($slot30['taf_raw'] ?? '') !== 'Data TAF Belum Tersedia');
+
+                $hasMetar = ($slot00 && ($slot00['metar_raw'] ?? '') !== 'Data METAR Belum Tersedia') 
+                         || ($slot30 && ($slot30['metar_raw'] ?? '') !== 'Data METAR Belum Tersedia');
                 
-                $score00 = $slot00['scores'] ? array_sum($slot00['scores']) : null;
-                $score30 = $slot30['scores'] ? array_sum($slot30['scores']) : null;
+                $score00 = ($slot00 && is_array($slot00['scores'] ?? null)) ? array_sum($slot00['scores']) : null;
+                $score30 = ($slot30 && is_array($slot30['scores'] ?? null)) ? array_sum($slot30['scores']) : null;
                 
                 $hourlyStatus[$h] = [
                     'taf' => $hasTaf,
@@ -62,7 +66,7 @@
             }
         @endphp
 
-        {{-- PANEL MONITORING MATRIKS 24-JAM (Model GTS Messages) --}}
+        {{-- Panel Monitoring Matriks 24-Jam --}}
         <div class="p-5 rounded-xl bg-[#1a1c23] border border-slate-800/80 shadow-lg space-y-4">
             <div class="flex items-center justify-between border-b border-slate-800/80 pb-3">
                 <div class="flex items-center gap-2">
@@ -83,7 +87,7 @@
                         </tr>
                     </thead>
                     <tbody class="divide-y divide-slate-800/40 font-mono text-[10px]">
-                        {{-- Row TAF Availability --}}
+                        {{-- Row TAF --}}
                         <tr>
                             <td class="py-2.5 px-3 text-left font-bold text-slate-300">TAF</td>
                             @for($h = 0; $h < 24; $h++)
@@ -96,7 +100,7 @@
                                 </td>
                             @endfor
                         </tr>
-                        {{-- Row METAR Availability --}}
+                        {{-- Row METAR --}}
                         <tr>
                             <td class="py-2.5 px-3 text-left font-bold text-slate-300">METAR</td>
                             @for($h = 0; $h < 24; $h++)
@@ -137,8 +141,6 @@
 
         {{-- 4-Card Summary Metrics --}}
         <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-            
-            {{-- Card 1: Akurasi Total --}}
             <div class="p-5 rounded-xl bg-[#1a1c23] border border-slate-800/80 shadow-md flex flex-col justify-between">
                 <div class="flex items-center justify-between">
                     <span class="text-xs font-bold text-slate-400 uppercase tracking-wider">Akurasi Total TAF</span>
@@ -157,7 +159,6 @@
                 </div>
             </div>
 
-            {{-- Card 2: Slot Sesuai --}}
             <div class="p-5 rounded-xl bg-[#1a1c23] border border-slate-800/80 shadow-md flex flex-col justify-between">
                 <div class="flex items-center justify-between">
                     <span class="text-xs font-bold text-slate-400 uppercase tracking-wider">Slot Sesuai SOP</span>
@@ -176,7 +177,6 @@
                 </div>
             </div>
 
-            {{-- Card 3: Slot Deviasi --}}
             <div class="p-5 rounded-xl bg-[#1a1c23] border border-slate-800/80 shadow-md flex flex-col justify-between">
                 <div class="flex items-center justify-between">
                     <span class="text-xs font-bold text-slate-400 uppercase tracking-wider">Slot Deviasi</span>
@@ -193,7 +193,6 @@
                 </div>
             </div>
 
-            {{-- Card 4: Progress Bar Parameter Summary --}}
             <div class="p-5 rounded-xl bg-[#1a1c23] border border-slate-800/80 shadow-md flex flex-col justify-between">
                 <div class="flex items-center justify-between mb-2">
                     <span class="text-xs font-bold text-slate-400 uppercase tracking-wider">Metrik Parameter</span>
@@ -216,10 +215,9 @@
                     @endforeach
                 </div>
             </div>
-
         </div>
 
-        {{-- Stream Data Table Log (Model GTS Table) --}}
+        {{-- Stream Data Table Log --}}
         <div class="rounded-xl bg-[#1a1c23] border border-slate-800/80 shadow-lg overflow-hidden">
             <div class="p-4 bg-[#14151b] border-b border-slate-800/80 flex items-center justify-between">
                 <h3 class="text-xs font-bold text-slate-300 uppercase tracking-wider">DATA STREAM LOG VERIFIKASI REALTIME</h3>
@@ -263,7 +261,7 @@
                                 @if($row['scores'])
                                     @foreach(['wind_dir', 'wind_speed', 'gust', 'visibility', 'precip', 'cloud', 'ceiling'] as $param)
                                         <td class="py-3 px-2 text-center whitespace-nowrap">
-                                            @if($row['scores'][$param] == 1)
+                                            @if(($row['scores'][$param] ?? 0) == 1)
                                                 <span class="inline-block w-6 py-0.5 rounded bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 font-bold text-[10px]">1</span>
                                             @else
                                                 <span class="inline-block w-6 py-0.5 rounded bg-rose-500/20 text-rose-400 border border-rose-500/30 font-bold text-[10px]">0</span>
