@@ -3,66 +3,100 @@
 namespace App\Filament\Pages;
 
 use App\Services\BmkgAviationApiService;
-use App\Services\TafReportExcelService;
+use App\Services\TafVerifierService;
 use Carbon\Carbon;
-use Filament\Forms\Components\DateTimePicker;
-use Filament\Forms\Concerns\InteractsWithForms;
-use Filament\Forms\Contracts\HasForms;
-use Filament\Forms\Form;
 use Filament\Pages\Page;
-use Filament\Notifications\Notification;
-use Filament\Notifications\Actions\Action;
-use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Facades\Cache;
 
-class VerifyTafPage extends Page implements HasForms
+class VerifyTafPage extends Page
 {
-    use InteractsWithForms;
-
-    protected static ?string $navigationIcon = 'heroicon-o-document-chart-bar';
-    protected static ?string $navigationLabel = 'Verifikasi TAFOR';
-    protected static ?string $title = 'Verifikasi TAFOR';
+    protected static ?string $navigationIcon = 'heroicon-o-check-badge';
     protected static string $view = 'filament.pages.verify-taf-page';
+    protected static ?string $title = 'Verifikasi TAF Realtime';
 
-    public ?array $data = [];
+    public string $selectedDate;
+    public string $icao = 'WITN';
 
     public function mount(): void
     {
-        $this->form->fill();
+        $this->selectedDate = now()->toDateString();
     }
 
-    public function form(Form $form): Form
+    public function getRealtimeVerificationProperty(): array
     {
-        return $form
-            ->schema([
-                DateTimePicker::make('start')
-                    ->label('Mulai Periode (UTC)')
-                    ->required(),
-                DateTimePicker::make('end')
-                    ->label('Akhir Periode (UTC)')
-                    ->required(),
-            ])
-            ->statePath('data');
+        $date = Carbon::parse($this->selectedDate);
+        $cacheKey = "taf_realtime_{$this->icao}_{$date->format('Y-m-d')}";
+
+        // Cache selama 10 menit agar tidak membebankan server BMKG
+        return Cache::remember($cacheKey, now()->addMinutes(10), function () use ($date) {
+            $api = app(BmkgAviationApiService::class);
+            $verifier = app(TafVerifierService::class);
+
+            $start = $date->copy()->startOfDay();
+            $end = $date->copy()->endOfDay();
+
+            $rawData = $api->collectData($this->icao, $start, $end);
+            $tafs = $rawData['tafs'];
+            $observations = $rawData['observations'];
+
+            $rows = [];
+            $now = now();
+
+            // Iterasi per jam dari jam 00:00 sampai jam saat ini (atau 23:00)
+            $maxHour = $date->isToday() ? $now->hour : 23;
+
+            for ($hour = 0; $hour <= $maxHour; $hour++) {
+                foreach ([0, 30] as $minute) {
+                    $targetTime = $date->copy()->setTime($hour, $minute);
+                    
+                    if ($targetTime > $now && $date->isToday()) {
+                        break;
+                    }
+
+                    // Cari TAF dan METAR aktif pada slot waktu ini
+                    $activeTaf = null;
+                    foreach ($tafs as $t) {
+                        if ($t->validStart <= $targetTime && $targetTime <= $t->validEnd) {
+                            $activeTaf = $t;
+                            break;
+                        }
+                    }
+
+                    $activeObs = null;
+                    foreach ($observations as $obs) {
+                        if (abs($obs->at->getTimestamp() - $targetTime->getTimestamp()) <= 900) {
+                            $activeObs = $obs;
+                            break;
+                        }
+                    }
+
+                    $scores = null;
+                    $groupKind = '-';
+
+                    if ($activeTaf && $activeObs) {
+                        $groups = $verifier->matchingGroups($activeTaf, $targetTime);
+                        $expectedGroup = end($groups);
+                        $groupKind = $expectedGroup->kind;
+                        $scores = $verifier->calculateScore($expectedGroup->condition, $activeObs->condition, $activeObs->raw);
+                    }
+
+                    $rows[] = [
+                        'time' => $targetTime->format('H:i') . ' UTC',
+                        'taf_raw' => $activeTaf?->raw ?? 'Data TAF Tidak Ada',
+                        'metar_raw' => $activeObs?->raw ?? 'Data METAR Belum Tersedia',
+                        'group' => $groupKind,
+                        'scores' => $scores,
+                    ];
+                }
+            }
+
+            return array_reverse($rows); // Tampilkan waktu terbaru di paling atas
+        });
     }
 
-    public function submit(BmkgAviationApiService $apiService, TafReportExcelService $excelService)
+    public function refreshData(): void
     {
-        $state = $this->form->getState();
-        $start = Carbon::parse($state['start'], 'UTC');
-        $end = Carbon::parse($state['end'], 'UTC');
-
-        $rawData = $apiService->collectData('WITN', $start, $end);
-        
-        $fileName = $excelService->generate($start, $rawData['tafs'], $rawData['observations']);
-
-        Notification::make()
-            ->title('Proses Verifikasi Selesai')
-            ->success()
-            ->actions([
-                Action::make('download')
-                    ->label('Unduh File Excel')
-                    ->button()
-                    ->url(Storage::url($fileName), shouldOpenInNewTab: true),
-            ])
-            ->send();
+        $cacheKey = "taf_realtime_{$this->icao}_" . Carbon::parse($this->selectedDate)->format('Y-m-d');
+        Cache::forget($cacheKey);
     }
 }
