@@ -1,33 +1,34 @@
 <x-filament-panels::page>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 
-    <div wire:poll.300s="refreshData" class="space-y-5 text-slate-200 font-sans -mt-2">
+    <div wire:poll.300s="refreshData" class="space-y-6 text-slate-100 font-sans -mt-2">
         
-        {{-- Header Bar & Quick Controls --}}
-        <div class="p-5 rounded-xl bg-[#1a1c23] border border-slate-800/80 shadow-lg flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
-            <div>
-                <div class="flex items-center gap-2 text-xs text-slate-400 font-medium mb-1">
-                    <span>Verifikasi TAF</span>
-                    <span>&rsaquo;</span>
-                    <span class="text-blue-400">Monitoring Realtime</span>
+        {{-- Header Control Bar --}}
+        <div class="p-6 rounded-2xl bg-[#13141f] shadow-2xl shadow-black/60 border border-white/[0.05] flex flex-col md:flex-row items-center justify-between gap-5">
+            <div class="flex items-center gap-4">
+                <div class="w-12 h-12 rounded-2xl bg-gradient-to-tr from-cyan-500 via-blue-600 to-indigo-600 flex items-center justify-center text-white shadow-lg shadow-cyan-500/25">
+                    <x-heroicon-m-signal class="w-6 h-6 animate-pulse" />
                 </div>
-                <h2 class="text-lg font-bold text-white tracking-wide">VERIFIKASI TAF REALTIME (WITN)</h2>
+                <div>
+                    <h2 class="text-base font-extrabold text-white tracking-wider uppercase">Aviation Realtime Command</h2>
+                    <p class="text-xs text-slate-400 font-medium">Sistem Monitoring & Verifikasi TAFOR • Stasiun WITN Sabang</p>
+                </div>
             </div>
 
-            <div class="flex flex-wrap items-center gap-3 w-full md:w-auto">
-                <div class="flex items-center gap-2 bg-[#121319] border border-slate-800 px-3.5 py-2 rounded-lg text-xs">
-                    <span class="text-slate-400 font-medium">Tanggal:</span>
-                    <input type="date" wire:model.live="selectedDate" class="bg-transparent border-0 text-xs font-bold text-blue-400 focus:ring-0 p-0 cursor-pointer">
+            <div class="flex flex-wrap items-center gap-3">
+                <div class="flex items-center gap-2 bg-[#0b0c13] px-4 py-2.5 rounded-xl border border-white/[0.05]">
+                    <span class="text-xs text-slate-400 font-medium">Tanggal:</span>
+                    <input type="date" wire:model.live="selectedDate" class="bg-transparent border-0 text-xs font-bold text-cyan-400 focus:ring-0 p-0 cursor-pointer">
                 </div>
 
-                <div class="flex items-center gap-2 bg-[#121319] border border-slate-800 px-3.5 py-2 rounded-lg text-xs">
-                    <span class="text-slate-400 font-medium">Stasiun:</span>
-                    <span class="font-mono font-bold text-emerald-400">WITN</span>
+                <div class="flex items-center gap-2 bg-[#0b0c13] px-4 py-2.5 rounded-xl border border-white/[0.05]">
+                    <span class="text-xs text-slate-400 font-medium">Stasiun:</span>
+                    <span class="font-mono font-black text-emerald-400 tracking-wider">WITN</span>
                 </div>
 
-                <button wire:click="refreshData" class="flex items-center gap-2 px-3.5 py-2 text-xs font-semibold text-white bg-blue-600 hover:bg-blue-500 rounded-lg shadow transition duration-150">
+                <button wire:click="refreshData" class="flex items-center gap-2 px-5 py-2.5 text-xs font-bold text-white bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 rounded-xl shadow-lg shadow-cyan-500/20 transition-all duration-300 hover:scale-[1.02] active:scale-95">
                     <x-heroicon-m-arrow-path class="w-4 h-4" wire:loading.class="animate-spin" />
-                    <span>Refresh</span>
+                    <span>Sync Telemetry</span>
                 </button>
             </div>
         </div>
@@ -36,7 +37,7 @@
             $summary = $this->realtimeData['summary'];
             $rows = $this->realtimeData['rows'];
 
-            // Map data per jam (00-23 UTC) dengan pengecekan Null-Safe
+            // Map Data 24-Jam UTC
             $hourlyStatus = [];
             for ($h = 0; $h < 24; $h++) {
                 $hStr = sprintf('%02d', $h);
@@ -66,210 +67,245 @@
             }
         @endphp
 
-        {{-- Panel Monitoring Matriks 24-Jam --}}
-        <div class="p-5 rounded-xl bg-[#1a1c23] border border-slate-800/80 shadow-lg space-y-4">
-            <div class="flex items-center justify-between border-b border-slate-800/80 pb-3">
-                <div class="flex items-center gap-2">
-                    <span class="w-2 h-2 rounded-full bg-emerald-400"></span>
-                    <h3 class="text-xs font-bold text-slate-300 uppercase tracking-wider">PANEL MONITORING KETERSEDIAAN & VERIFIKASI TAF STASIUN</h3>
+        {{-- Panel Matrix Telemetry 24-Jam (Futuristic Timeline HUD) --}}
+        <div class="p-6 rounded-2xl bg-[#13141f] shadow-2xl shadow-black/60 border border-white/[0.05] space-y-4">
+            <div class="flex items-center justify-between pb-2 border-b border-white/[0.05]">
+                <div class="flex items-center gap-2.5">
+                    <span class="w-2.5 h-2.5 rounded-full bg-cyan-400 shadow-[0_0_10px_#22d3ee]"></span>
+                    <h3 class="text-xs font-extrabold text-slate-200 uppercase tracking-widest">Matriks Ketersediaan & Status Verifikasi (24 Jam UTC)</h3>
                 </div>
-                <span class="text-[10px] font-mono text-slate-400">WAKTU DALAM UTC</span>
+                <span class="text-[10px] font-mono font-semibold text-slate-400 bg-[#0b0c13] px-2.5 py-1 rounded-lg border border-white/[0.05]">HOURLY STREAM</span>
             </div>
 
-            <div class="overflow-x-auto">
-                <table class="w-full text-center border-collapse text-xs">
-                    <thead>
-                        <tr class="text-slate-400 font-bold text-[11px] border-b border-slate-800/60">
-                            <th class="py-2 px-3 text-left w-24">JAM (UTC)</th>
-                            @for($h = 0; $h < 24; $h++)
-                                <th class="py-2 px-1 w-8 font-mono text-slate-300">{{ sprintf('%02d', $h) }}</th>
-                            @endfor
-                        </tr>
-                    </thead>
-                    <tbody class="divide-y divide-slate-800/40 font-mono text-[10px]">
-                        {{-- Row TAF --}}
-                        <tr>
-                            <td class="py-2.5 px-3 text-left font-bold text-slate-300">TAF</td>
-                            @for($h = 0; $h < 24; $h++)
-                                <td class="py-2.5 px-1">
-                                    @if($hourlyStatus[$h]['taf'])
-                                        <span class="inline-block w-6 py-0.5 rounded bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 font-bold">On</span>
-                                    @else
-                                        <span class="inline-block w-6 py-0.5 rounded bg-slate-800/60 text-slate-600">-</span>
-                                    @endif
-                                </td>
-                            @endfor
-                        </tr>
-                        {{-- Row METAR --}}
-                        <tr>
-                            <td class="py-2.5 px-3 text-left font-bold text-slate-300">METAR</td>
-                            @for($h = 0; $h < 24; $h++)
-                                <td class="py-2.5 px-1">
-                                    @if($hourlyStatus[$h]['metar'])
-                                        <span class="inline-block w-6 py-0.5 rounded bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 font-bold">On</span>
-                                    @else
-                                        <span class="inline-block w-6 py-0.5 rounded bg-slate-800/60 text-slate-600">-</span>
-                                    @endif
-                                </td>
-                            @endfor
-                        </tr>
-                        {{-- Row Status Verifikasi --}}
-                        <tr>
-                            <td class="py-2.5 px-3 text-left font-bold text-slate-300">VERIFIKASI</td>
-                            @for($h = 0; $h < 24; $h++)
-                                @php
-                                    $s00 = $hourlyStatus[$h]['score00'];
-                                    $s30 = $hourlyStatus[$h]['score30'];
-                                    $isFullPass = ($s00 === 7 && ($s30 === 7 || $s30 === null));
-                                    $hasDev = ($s00 !== null && $s00 < 7) || ($s30 !== null && $s30 < 7);
-                                @endphp
-                                <td class="py-2.5 px-1">
-                                    @if($isFullPass)
-                                        <span class="inline-block w-6 py-0.5 rounded bg-blue-500/20 text-blue-400 border border-blue-500/30 font-bold">100%</span>
-                                    @elseif($hasDev)
-                                        <span class="inline-block w-6 py-0.5 rounded bg-rose-500/20 text-rose-400 border border-rose-500/30 font-bold">Dev</span>
-                                    @else
-                                        <span class="inline-block w-6 py-0.5 rounded bg-slate-800/60 text-slate-600">-</span>
-                                    @endif
-                                </td>
-                            @endfor
-                        </tr>
-                    </tbody>
-                </table>
+            <div class="overflow-x-auto pb-2">
+                <div class="min-w-[850px] grid grid-cols-25 gap-1.5 text-center font-mono">
+                    {{-- Row Label Headers --}}
+                    <div class="text-left text-[11px] font-bold text-slate-400 self-center">JAM</div>
+                    @for($h = 0; $h < 24; $h++)
+                        <div class="text-[10px] font-bold text-slate-400 bg-[#0b0c13] py-1 rounded-md border border-white/[0.03]">
+                            {{ sprintf('%02d', $h) }}
+                        </div>
+                    @endfor
+
+                    {{-- Row TAF Status --}}
+                    <div class="text-left text-[11px] font-bold text-slate-300 self-center">TAF</div>
+                    @for($h = 0; $h < 24; $h++)
+                        <div class="py-1 rounded-md text-[10px] font-extrabold transition-all {{ $hourlyStatus[$h]['taf'] ? 'bg-cyan-500/15 text-cyan-400 border border-cyan-500/30' : 'bg-[#0b0c13] text-slate-600' }}">
+                            {{ $hourlyStatus[$h]['taf'] ? 'ON' : '-' }}
+                        </div>
+                    @endfor
+
+                    {{-- Row METAR Status --}}
+                    <div class="text-left text-[11px] font-bold text-slate-300 self-center">METAR</div>
+                    @for($h = 0; $h < 24; $h++)
+                        <div class="py-1 rounded-md text-[10px] font-extrabold transition-all {{ $hourlyStatus[$h]['metar'] ? 'bg-emerald-500/15 text-emerald-400 border border-emerald-500/30' : 'bg-[#0b0c13] text-slate-600' }}">
+                            {{ $hourlyStatus[$h]['metar'] ? 'ON' : '-' }}
+                        </div>
+                    @endfor
+
+                    {{-- Row Verification Score --}}
+                    <div class="text-left text-[11px] font-bold text-slate-300 self-center">VERIF</div>
+                    @for($h = 0; $h < 24; $h++)
+                        @php
+                            $s00 = $hourlyStatus[$h]['score00'];
+                            $s30 = $hourlyStatus[$h]['score30'];
+                            $isFull = ($s00 === 7 && ($s30 === 7 || $s30 === null));
+                            $hasDev = ($s00 !== null && $s00 < 7) || ($s30 !== null && $s30 < 7);
+                        @endphp
+                        <div class="py-1 rounded-md text-[10px] font-black transition-all {{ $isFull ? 'bg-blue-500/20 text-cyan-300 border border-blue-500/30' : ($hasDev ? 'bg-rose-500/20 text-rose-400 border border-rose-500/30' : 'bg-[#0b0c13] text-slate-600') }}">
+                            {{ $isFull ? '100%' : ($hasDev ? 'DEV' : '-') }}
+                        </div>
+                    @endfor
+                </div>
             </div>
         </div>
 
-        {{-- 4-Card Summary Metrics --}}
-        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-            <div class="p-5 rounded-xl bg-[#1a1c23] border border-slate-800/80 shadow-md flex flex-col justify-between">
+        {{-- 4-Card Bento Grid Overview --}}
+        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-5">
+            
+            {{-- Card 1: Akurasi Total --}}
+            <div class="p-6 rounded-2xl bg-[#13141f] shadow-2xl shadow-black/60 border border-white/[0.05] flex flex-col justify-between relative overflow-hidden group">
+                <div class="absolute -right-6 -top-6 w-24 h-24 bg-cyan-500/10 rounded-full blur-xl pointer-events-none group-hover:bg-cyan-500/20 transition-all duration-500"></div>
                 <div class="flex items-center justify-between">
                     <span class="text-xs font-bold text-slate-400 uppercase tracking-wider">Akurasi Total TAF</span>
-                    <span class="px-2 py-0.5 rounded text-[10px] font-bold bg-blue-500/20 text-blue-400 border border-blue-500/30">
-                        {{ $summary['accuracy'] >= 80 ? 'EXCELLENT' : 'WARNING' }}
+                    <span class="px-2.5 py-1 rounded-lg text-[10px] font-black tracking-wider uppercase border {{ $summary['accuracy'] >= 80 ? 'bg-cyan-500/10 text-cyan-400 border-cyan-500/30' : 'bg-amber-500/10 text-amber-400 border-amber-500/30' }}">
+                        {{ $summary['accuracy'] >= 80 ? 'HIGH ACCURACY' : 'ATTENTION' }}
                     </span>
                 </div>
-                <div class="my-3">
-                    <span class="text-4xl font-extrabold text-white tracking-tight">
+                <div class="my-5">
+                    <span class="text-5xl font-black tracking-tight text-transparent bg-clip-text bg-gradient-to-r from-cyan-400 via-teal-300 to-emerald-400">
                         {{ $summary['accuracy'] }}%
                     </span>
                 </div>
-                <div class="text-[11px] text-slate-400 flex items-center justify-between border-t border-slate-800/60 pt-2.5">
-                    <span>Total Evaluasi</span>
+                <div class="text-[11px] text-slate-400 flex items-center justify-between pt-3 border-t border-white/[0.05]">
+                    <span>Total Evaluasi Slot</span>
                     <span class="font-mono font-bold text-slate-200">{{ $summary['total'] }} Slot</span>
                 </div>
             </div>
 
-            <div class="p-5 rounded-xl bg-[#1a1c23] border border-slate-800/80 shadow-md flex flex-col justify-between">
+            {{-- Card 2: Slot Sesuai --}}
+            <div class="p-6 rounded-2xl bg-[#13141f] shadow-2xl shadow-black/60 border border-white/[0.05] flex flex-col justify-between relative overflow-hidden group">
+                <div class="absolute -right-6 -top-6 w-24 h-24 bg-emerald-500/10 rounded-full blur-xl pointer-events-none group-hover:bg-emerald-500/20 transition-all duration-500"></div>
                 <div class="flex items-center justify-between">
                     <span class="text-xs font-bold text-slate-400 uppercase tracking-wider">Slot Sesuai SOP</span>
-                    <span class="px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-500/20 text-emerald-400 border border-emerald-500/30">PASSED</span>
+                    <div class="p-2 rounded-xl bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+                        <x-heroicon-m-check-circle class="w-5 h-5" />
+                    </div>
                 </div>
-                <div class="my-3">
-                    <span class="text-4xl font-extrabold text-emerald-400 tracking-tight">
+                <div class="my-5">
+                    <span class="text-5xl font-black text-emerald-400 tracking-tight">
                         {{ $summary['passed'] }}
                     </span>
                 </div>
-                <div class="text-[11px] text-slate-400 flex items-center justify-between border-t border-slate-800/60 pt-2.5">
-                    <span>Kesesuaian</span>
+                <div class="text-[11px] text-slate-400 flex items-center justify-between pt-3 border-t border-white/[0.05]">
+                    <span>Rasio Kesesuaian</span>
                     <span class="font-mono font-bold text-emerald-400">
                         {{ $summary['total'] > 0 ? round(($summary['passed'] / $summary['total']) * 100) : 0 }}%
                     </span>
                 </div>
             </div>
 
-            <div class="p-5 rounded-xl bg-[#1a1c23] border border-slate-800/80 shadow-md flex flex-col justify-between">
+            {{-- Card 3: Deviasi --}}
+            <div class="p-6 rounded-2xl bg-[#13141f] shadow-2xl shadow-black/60 border border-white/[0.05] flex flex-col justify-between relative overflow-hidden group">
+                <div class="absolute -right-6 -top-6 w-24 h-24 bg-rose-500/10 rounded-full blur-xl pointer-events-none group-hover:bg-rose-500/20 transition-all duration-500"></div>
                 <div class="flex items-center justify-between">
                     <span class="text-xs font-bold text-slate-400 uppercase tracking-wider">Slot Deviasi</span>
-                    <span class="px-2 py-0.5 rounded text-[10px] font-bold bg-rose-500/20 text-rose-400 border border-rose-500/30">DEVIATION</span>
+                    <div class="p-2 rounded-xl bg-rose-500/10 text-rose-400 border border-rose-500/20">
+                        <x-heroicon-m-x-circle class="w-5 h-5" />
+                    </div>
                 </div>
-                <div class="my-3">
-                    <span class="text-4xl font-extrabold text-rose-400 tracking-tight">
+                <div class="my-5">
+                    <span class="text-5xl font-black text-rose-400 tracking-tight">
                         {{ $summary['failed'] }}
                     </span>
                 </div>
-                <div class="text-[11px] text-slate-400 flex items-center justify-between border-t border-slate-800/60 pt-2.5">
-                    <span>Terdegradasi</span>
+                <div class="text-[11px] text-slate-400 flex items-center justify-between pt-3 border-t border-white/[0.05]">
+                    <span>Jumlah Terdegradasi</span>
                     <span class="font-mono font-bold text-rose-400">{{ $summary['failed'] }} Slot</span>
                 </div>
             </div>
 
-            <div class="p-5 rounded-xl bg-[#1a1c23] border border-slate-800/80 shadow-md flex flex-col justify-between">
-                <div class="flex items-center justify-between mb-2">
-                    <span class="text-xs font-bold text-slate-400 uppercase tracking-wider">Metrik Parameter</span>
-                    <span class="text-[10px] font-mono text-blue-400">7 PARAMETER</span>
+            {{-- Card 4: Donut Gauge --}}
+            <div class="p-6 rounded-2xl bg-[#13141f] shadow-2xl shadow-black/60 border border-white/[0.05] flex items-center justify-between"
+                 x-data="{
+                    init() {
+                        const ctx = document.getElementById('miniRingGauge');
+                        if (ctx) {
+                            new Chart(ctx, {
+                                type: 'doughnut',
+                                data: {
+                                    datasets: [{
+                                        data: [{{ $summary['passed'] }}, {{ $summary['failed'] }}],
+                                        backgroundColor: ['#06b6d4', '#f43f5e'],
+                                        borderWidth: 0
+                                    }]
+                                },
+                                options: {
+                                    responsive: true,
+                                    maintainAspectRatio: false,
+                                    plugins: { legend: { display: false } },
+                                    cutout: '82%'
+                                }
+                            });
+                        }
+                    }
+                 }">
+                <div class="space-y-1">
+                    <span class="text-xs font-bold text-slate-400 uppercase tracking-wider block">Proporsi Validasi</span>
+                    <div class="text-3xl font-black text-white">{{ $summary['accuracy'] }}%</div>
+                    <p class="text-[10px] text-cyan-400 font-bold uppercase tracking-wider">Automated HUD</p>
                 </div>
-                <div class="space-y-1.5 overflow-y-auto max-h-24 pr-1">
-                    @foreach($summary['paramStats'] as $param)
-                        @php
-                            $rate = $param['total'] > 0 ? round(($param['pass'] / $param['total']) * 100) : 0;
-                        @endphp
-                        <div class="flex items-center justify-between text-[11px]">
-                            <span class="text-slate-400 truncate max-w-[100px]">{{ $param['label'] }}</span>
-                            <div class="flex items-center gap-2">
-                                <div class="w-16 bg-slate-800 rounded-full h-1 overflow-hidden">
-                                    <div class="bg-blue-500 h-1 rounded-full" style="width: {{ $rate }}%"></div>
-                                </div>
-                                <span class="font-mono text-xs font-bold text-slate-200">{{ $rate }}%</span>
-                            </div>
+                <div class="relative w-20 h-20 flex items-center justify-center">
+                    <canvas id="miniRingGauge"></canvas>
+                    <div class="absolute inset-0 flex items-center justify-center text-[10px] font-mono font-extrabold text-slate-200">
+                        {{ $summary['passed'] }}/{{ $summary['total'] }}
+                    </div>
+                </div>
+            </div>
+
+        </div>
+
+        {{-- SOP Parameter Accuracy Bars --}}
+        <div class="p-6 rounded-2xl bg-[#13141f] shadow-2xl shadow-black/60 border border-white/[0.05] space-y-4">
+            <div class="flex items-center justify-between pb-3 border-b border-white/[0.05]">
+                <h3 class="text-xs font-extrabold text-slate-200 uppercase tracking-widest">Akurasi per 7 Parameter SOP Meteorologi</h3>
+                <span class="text-[10px] font-mono font-extrabold text-cyan-400 bg-[#0b0c13] px-2.5 py-1 rounded-lg border border-white/[0.05]">COMPLIANCE RATE</span>
+            </div>
+            
+            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                @foreach($summary['paramStats'] as $param)
+                    @php
+                        $rate = $param['total'] > 0 ? round(($param['pass'] / $param['total']) * 100) : 0;
+                    @endphp
+                    <div class="p-4 rounded-xl bg-[#0b0c13] border border-white/[0.03] space-y-2.5">
+                        <div class="flex justify-between items-center text-xs">
+                            <span class="text-slate-300 font-medium">{{ $param['label'] }}</span>
+                            <span class="font-mono font-black text-cyan-400">{{ $rate }}%</span>
                         </div>
-                    @endforeach
-                </div>
+                        <div class="w-full bg-slate-800/80 rounded-full h-2 overflow-hidden p-0.5 border border-white/[0.03]">
+                            <div class="bg-gradient-to-r from-cyan-500 to-emerald-400 h-1.5 rounded-full transition-all duration-500 shadow-[0_0_8px_#22d3ee]" style="width: {{ $rate }}%"></div>
+                        </div>
+                    </div>
+                @endforeach
             </div>
         </div>
 
-        {{-- Stream Data Table Log --}}
-        <div class="rounded-xl bg-[#1a1c23] border border-slate-800/80 shadow-lg overflow-hidden">
-            <div class="p-4 bg-[#14151b] border-b border-slate-800/80 flex items-center justify-between">
-                <h3 class="text-xs font-bold text-slate-300 uppercase tracking-wider">DATA STREAM LOG VERIFIKASI REALTIME</h3>
-                <span class="text-[10px] text-slate-400 font-mono">INTERVAL 30-MENIT</span>
+        {{-- Live Stream Data Log Table --}}
+        <div class="rounded-2xl bg-[#13141f] shadow-2xl shadow-black/60 border border-white/[0.05] overflow-hidden">
+            <div class="p-5 bg-[#0b0c13] flex items-center justify-between border-b border-white/[0.05]">
+                <div class="flex items-center gap-2.5">
+                    <span class="w-2.5 h-2.5 rounded-full bg-emerald-400 animate-ping"></span>
+                    <h3 class="text-xs font-extrabold text-white uppercase tracking-widest">Live Telemetry Stream Log (30-Min Intervals)</h3>
+                </div>
+                <span class="text-[10px] text-slate-400 font-mono bg-[#13141f] px-2.5 py-1 rounded-lg border border-white/[0.05]">REALTIME DATA</span>
             </div>
 
             <div class="overflow-x-auto">
                 <table class="w-full text-left border-collapse text-xs">
                     <thead>
-                        <tr class="text-slate-400 font-semibold text-[11px] bg-[#121319] border-b border-slate-800/80">
-                            <th class="py-3 px-4">JAM (UTC)</th>
-                            <th class="py-3 px-3">GROUP</th>
-                            <th class="py-3 px-4 min-w-[340px]">ISI SANDI TAF & METAR RAW</th>
-                            <th class="py-3 px-2 text-center">DIR</th>
-                            <th class="py-3 px-2 text-center">SPD</th>
-                            <th class="py-3 px-2 text-center">GUST</th>
-                            <th class="py-3 px-2 text-center">VIS</th>
-                            <th class="py-3 px-2 text-center">PRECIP</th>
-                            <th class="py-3 px-2 text-center">CLOUD</th>
-                            <th class="py-3 px-2 text-center">CEILING</th>
+                        <tr class="text-slate-400 font-bold text-[10px] bg-[#0d0e17] uppercase tracking-wider border-b border-white/[0.05]">
+                            <th class="py-4 px-4">Jam (UTC)</th>
+                            <th class="py-4 px-3">Group</th>
+                            <th class="py-4 px-4 min-w-[360px]">Sandi TAF & METAR Raw</th>
+                            <th class="py-4 px-2 text-center">Dir</th>
+                            <th class="py-4 px-2 text-center">Spd</th>
+                            <th class="py-4 px-2 text-center">Gust</th>
+                            <th class="py-4 px-2 text-center">Vis</th>
+                            <th class="py-4 px-2 text-center">Precip</th>
+                            <th class="py-4 px-2 text-center">Cloud</th>
+                            <th class="py-4 px-2 text-center">Ceiling</th>
                         </tr>
                     </thead>
-                    <tbody class="divide-y divide-slate-800/40 font-mono">
+                    <tbody class="divide-y divide-white/[0.03] font-mono">
                         @forelse($rows as $row)
-                            <tr class="hover:bg-slate-800/20 transition duration-100">
-                                <td class="py-3 px-4 font-bold text-blue-400 whitespace-nowrap">{{ $row['time'] }}</td>
-                                <td class="py-3 px-3 whitespace-nowrap">
-                                    <span class="px-2 py-0.5 rounded text-[10px] font-bold bg-slate-800 text-slate-300 border border-slate-700">
+                            <tr class="hover:bg-slate-800/30 transition duration-150">
+                                <td class="py-4 px-4 font-black text-cyan-400 whitespace-nowrap">{{ $row['time'] }}</td>
+                                <td class="py-4 px-3 whitespace-nowrap">
+                                    <span class="px-2.5 py-1 rounded-lg text-[10px] font-extrabold bg-blue-500/10 text-cyan-300 border border-blue-500/20">
                                         {{ $row['group'] }}
                                     </span>
                                 </td>
-                                <td class="py-3 px-4 space-y-1">
-                                    <div class="p-2 rounded bg-[#121319] text-slate-300 text-[11px] leading-relaxed border border-slate-800/60">
-                                        <span class="text-blue-400 font-bold mr-1.5">[TAF]</span>{{ $row['taf_raw'] }}
+                                <td class="py-4 px-4 space-y-1.5">
+                                    <div class="p-2.5 rounded-xl bg-[#0b0c13] text-slate-200 text-[11px] leading-relaxed border border-white/[0.03]">
+                                        <span class="text-cyan-400 font-black mr-1.5">[TAF]</span>{{ $row['taf_raw'] }}
                                     </div>
-                                    <div class="p-2 rounded bg-[#121319] text-slate-300 text-[11px] leading-relaxed border border-slate-800/60">
-                                        <span class="text-emerald-400 font-bold mr-1.5">[METAR]</span>{{ $row['metar_raw'] }}
+                                    <div class="p-2.5 rounded-xl bg-[#0b0c13] text-slate-200 text-[11px] leading-relaxed border border-white/[0.03]">
+                                        <span class="text-emerald-400 font-black mr-1.5">[METAR]</span>{{ $row['metar_raw'] }}
                                     </div>
                                 </td>
 
                                 @if($row['scores'])
                                     @foreach(['wind_dir', 'wind_speed', 'gust', 'visibility', 'precip', 'cloud', 'ceiling'] as $param)
-                                        <td class="py-3 px-2 text-center whitespace-nowrap">
+                                        <td class="py-4 px-2 text-center whitespace-nowrap">
                                             @if(($row['scores'][$param] ?? 0) == 1)
-                                                <span class="inline-block w-6 py-0.5 rounded bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 font-bold text-[10px]">1</span>
+                                                <span class="inline-flex items-center justify-center w-7 h-7 rounded-xl bg-emerald-500/15 text-emerald-400 border border-emerald-500/30 font-black text-xs shadow-[0_0_8px_rgba(16,185,129,0.15)]">1</span>
                                             @else
-                                                <span class="inline-block w-6 py-0.5 rounded bg-rose-500/20 text-rose-400 border border-rose-500/30 font-bold text-[10px]">0</span>
+                                                <span class="inline-flex items-center justify-center w-7 h-7 rounded-xl bg-rose-500/15 text-rose-400 border border-rose-500/30 font-black text-xs shadow-[0_0_8px_rgba(244,63,94,0.15)]">0</span>
                                             @endif
                                         </td>
                                     @endforeach
                                 @else
-                                    <td colspan="7" class="py-3 px-4 text-center italic text-slate-500 text-[11px]">
+                                    <td colspan="7" class="py-4 px-4 text-center italic text-slate-500 text-[11px]">
                                         Data belum lengkap
                                     </td>
                                 @endif
