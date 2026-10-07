@@ -21,12 +21,12 @@
                 </div>
 
                 <div class="flex flex-wrap items-center gap-3">
-                    <div class="flex items-center gap-2 bg-gray-100 dark:bg-gray-800/80 px-3.5 py-1.5 rounded-lg border border-gray-200 dark:border-white/10 text-xs">
+                    <div class="flex items-center gap-2 bg-gray-100 dark:bg-gray-800/80 px-3.5 py-1.5 rounded-lg border-0 text-xs">
                         <span class="text-gray-500 dark:text-gray-400 font-medium">Tanggal:</span>
                         <input type="date" wire:model.live="selectedDate" class="bg-transparent border-0 text-xs font-bold text-primary-600 dark:text-primary-400 focus:ring-0 p-0 cursor-pointer">
                     </div>
 
-                    <div class="flex items-center gap-2 bg-gray-100 dark:bg-gray-800/80 px-3.5 py-1.5 rounded-lg border border-gray-200 dark:border-white/10 text-xs">
+                    <div class="flex items-center gap-2 bg-gray-100 dark:bg-gray-800/80 px-3.5 py-1.5 rounded-lg border-0 text-xs">
                         <span class="text-gray-500 dark:text-gray-400 font-medium">Stasiun:</span>
                         <span class="font-mono font-bold text-emerald-600 dark:text-emerald-400">WITN</span>
                     </div>
@@ -72,7 +72,7 @@
             }
         @endphp
 
-        {{-- Section Utama: Side-by-Side Matrix & Pie Chart --}}
+        {{-- Section Utama: Matriks 24-Jam & Donut Chart --}}
         <div class="grid grid-cols-1 lg:grid-cols-12 gap-6">
 
             {{-- 1. Matriks Ketersediaan Data (8 Kolom) --}}
@@ -89,37 +89,37 @@
                                 </tr>
                             </thead>
                             <tbody class="divide-y divide-gray-200 dark:divide-white/5 font-mono text-[10px]">
-                                {{-- Row TAF (Cyan Theme) --}}
+                                {{-- Row TAF (Cyan Theme - Border-0) --}}
                                 <tr>
-                                    <td class="py-2.5 px-3 text-left font-sans font-bold text-cyan-600 dark:text-cyan-400">TAF</td>
+                                    <td class="py-2.5 px-3 text-left font-sans font-bold text-cyan-500 dark:text-cyan-400">TAF</td>
                                     @for($h = 0; $h < 24; $h++)
                                         <td class="py-2.5 px-0.5">
                                             @if($hourlyStatus[$h]['taf'])
-                                                <span class="inline-flex items-center justify-center w-7 py-0.5 rounded text-[10px] font-bold bg-cyan-500/20 text-cyan-700 dark:text-cyan-300 border border-cyan-500/30">On</span>
+                                                <span class="inline-flex items-center justify-center w-7 py-1 rounded-md text-[10px] font-black bg-cyan-500/20 text-cyan-600 dark:text-cyan-300 border-0">On</span>
                                             @else
-                                                <span class="inline-flex items-center justify-center w-7 py-0.5 text-gray-400 dark:text-gray-600">-</span>
+                                                <span class="inline-flex items-center justify-center w-7 py-1 text-gray-400 dark:text-gray-600">-</span>
                                             @endif
                                         </td>
                                     @endfor
                                 </tr>
 
-                                {{-- Row METAR (Emerald Theme) --}}
+                                {{-- Row METAR (Emerald Theme - Border-0) --}}
                                 <tr>
-                                    <td class="py-2.5 px-3 text-left font-sans font-bold text-emerald-600 dark:text-emerald-400">METAR</td>
+                                    <td class="py-2.5 px-3 text-left font-sans font-bold text-emerald-500 dark:text-emerald-400">METAR</td>
                                     @for($h = 0; $h < 24; $h++)
                                         <td class="py-2.5 px-0.5">
                                             @if($hourlyStatus[$h]['metar'])
-                                                <span class="inline-flex items-center justify-center w-7 py-0.5 rounded text-[10px] font-bold bg-emerald-500/20 text-emerald-700 dark:text-emerald-300 border border-emerald-500/30">On</span>
+                                                <span class="inline-flex items-center justify-center w-7 py-1 rounded-md text-[10px] font-black bg-emerald-500/20 text-emerald-600 dark:text-emerald-300 border-0">On</span>
                                             @else
-                                                <span class="inline-flex items-center justify-center w-7 py-0.5 text-gray-400 dark:text-gray-600">-</span>
+                                                <span class="inline-flex items-center justify-center w-7 py-1 text-gray-400 dark:text-gray-600">-</span>
                                             @endif
                                         </td>
                                     @endfor
                                 </tr>
 
-                                {{-- Row VERIFIKASI (Indigo/Rose Theme) --}}
+                                {{-- Row VERIFIKASI (Indigo/Rose Theme - Border-0) --}}
                                 <tr>
-                                    <td class="py-2.5 px-3 text-left font-sans font-bold text-indigo-600 dark:text-indigo-400">VERIF</td>
+                                    <td class="py-2.5 px-3 text-left font-sans font-bold text-indigo-500 dark:text-indigo-400">VERIF</td>
                                     @for($h = 0; $h < 24; $h++)
                                         @php
                                             $s00 = $hourlyStatus[$h]['score00'];
@@ -129,11 +129,11 @@
                                         @endphp
                                         <td class="py-2.5 px-0.5">
                                             @if($isFull)
-                                                <span class="inline-flex items-center justify-center w-7 py-0.5 rounded text-[10px] font-extrabold bg-indigo-500/20 text-indigo-700 dark:text-indigo-300 border border-indigo-500/30">✓</span>
+                                                <span class="inline-flex items-center justify-center w-7 py-1 rounded-md text-[10px] font-black bg-indigo-500/25 text-indigo-600 dark:text-indigo-300 border-0">✓</span>
                                             @elseif($hasDev)
-                                                <span class="inline-flex items-center justify-center w-7 py-0.5 rounded text-[10px] font-extrabold bg-rose-500/20 text-rose-700 dark:text-rose-400 border border-rose-500/30">!</span>
+                                                <span class="inline-flex items-center justify-center w-7 py-1 rounded-md text-[10px] font-black bg-rose-500/25 text-rose-600 dark:text-rose-300 border-0">!</span>
                                             @else
-                                                <span class="inline-flex items-center justify-center w-7 py-0.5 text-gray-400 dark:text-gray-600">-</span>
+                                                <span class="inline-flex items-center justify-center w-7 py-1 text-gray-400 dark:text-gray-600">-</span>
                                             @endif
                                         </td>
                                     @endfor
@@ -158,7 +158,6 @@
                                         datasets: [{
                                             data: [{{ $summary['passed'] }}, {{ $summary['failed'] }}],
                                             backgroundColor: ['#10b981', '#f43f5e'],
-                                            hoverBackgroundColor: ['#059669', '#e11d48'],
                                             borderWidth: 0,
                                             borderRadius: 6
                                         }]
