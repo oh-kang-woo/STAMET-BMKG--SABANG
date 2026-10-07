@@ -4,11 +4,10 @@ namespace App\Services;
 
 use App\DTOs\Taf\TafData;
 use App\DTOs\Taf\ObservationData;
+use Carbon\Carbon;
 use DateTime;
 use DateTimeZone;
-use DateInterval;
 use PhpOffice\PhpSpreadsheet\IOFactory;
-use PhpOffice\PhpSpreadsheet\Spreadsheet;
 use PhpOffice\PhpSpreadsheet\Worksheet\Worksheet;
 
 class TafReportExcelService
@@ -21,66 +20,79 @@ class TafReportExcelService
     }
 
     /**
-     * Menghasilkan file Excel laporan verifikasi TAF bulanan.
+     * Entry point yang dipanggil oleh VerifyTafPage.php
      */
-    public function generateMonthlyReport(
-        int $year,
-        int $month,
-        array $rawTafs,
-        array $rawObservations,
-        string $templatePath,
-        string $outputPath
-    ): string {
-        $spreadsheet = IOFactory::load($templatePath);
-        $daysInMonth = cal_days_in_month(CAL_GREGORIAN, $month, $year);
+    public function generate(Carbon $start, array $tafs, array $observations): string
+    {
+        // Cari lokasi file template di storage/app/templates/
+        $templatePath = storage_path('app/templates/Verifikasi_Taf.xlsx');
+        if (!file_exists($templatePath)) {
+            $templatePath = base_path('Template Verif TAF.xlsx');
+        }
 
-        // Parse semua data TAF dan METAR/SPECI
+        if (!file_exists($templatePath)) {
+            throw new \Exception("File template verifikasi TAF tidak ditemukan.");
+        }
+
+        $spreadsheet = IOFactory::load($templatePath);
+        
+        $year = $start->year;
+        $month = $start->month;
+        $daysInMonth = $start->daysInMonth;
+
+        // 1. Parse seluruh string TAF dan Observation
         $tafList = [];
-        foreach ($rawTafs as $raw) {
-            $parsed = $this->parser->parseTaf($raw);
-            if ($parsed) $tafList[] = $parsed;
+        foreach ($tafs as $raw) {
+            $parsed = $this->parser->parseTaf($raw, $start->toDateTime());
+            if ($parsed) {
+                $tafList[] = $parsed;
+            }
         }
 
         $obsList = [];
-        foreach ($rawObservations as $raw) {
-            $parsed = $this->parser->parseObservation($raw);
-            if ($parsed) $obsList[] = $parsed;
+        foreach ($observations as $raw) {
+            $parsed = $this->parser->parseObservation($raw, $start->toDateTime());
+            if ($parsed) {
+                $obsList[] = $parsed;
+            }
         }
 
-        // Hapus sheet tanggal yang melebihi jumlah hari dalam bulan tersebut
-        for ($d = $daysInMonth + 1; $d <= 31; $d++) {
-            $sheetName = sprintf('%02d', $d);
+        // 2. Hapus sheet tanggal yang melebihi jumlah hari dalam bulan tersebut
+        for ($day = $daysInMonth + 1; $day <= 31; $day++) {
+            $sheetName = (string)$day;
             if ($spreadsheet->sheetExists($sheetName)) {
                 $sheetIndex = $spreadsheet->getIndex($spreadsheet->getSheetByName($sheetName));
                 $spreadsheet->removeSheetByIndex($sheetIndex);
             }
         }
 
-        // Isikan data verifikasi harian (Sheet 01 - 28/30/31)
+        // 3. Isikan data verifikasi harian (Sheet 1 s.d. 28/30/31)
         for ($day = 1; $day <= $daysInMonth; $day++) {
-            $sheetName = sprintf('%02d', $day);
+            $sheetName = (string)$day;
             if ($spreadsheet->sheetExists($sheetName)) {
                 $sheet = $spreadsheet->getSheetByName($sheetName);
                 $this->processDaySheet($sheet, $year, $month, $day, $tafList, $obsList);
             }
         }
 
-        // Update Judul di Sheet Rekap 1 Bulan
+        // 4. Update Judul pada Sheet "rekap 1 bulan"
         if ($spreadsheet->sheetExists('rekap 1 bulan')) {
             $rekapSheet = $spreadsheet->getSheetByName('rekap 1 bulan');
-            $monthNames = [
-                1 => 'JANUARI', 2 => 'FEBRUARI', 3 => 'MARET', 4 => 'APRIL',
-                5 => 'MEI', 6 => 'JUNI', 7 => 'JULI', 8 => 'AGUSTUS',
-                9 => 'SEPTEMBER', 10 => 'OKTOBER', 11 => 'NOVEMBER', 12 => 'DESEMBER'
-            ];
-            $title = "REKAPITULASI HASIL EVALUASI VERIFIKASI TAF BULAN " . $monthNames[$month] . " " . $year;
-            $rekapSheet->setCellValue('A2', $title);
+            $rekapSheet->setCellValue(
+                'A2',
+                "VERIFIKASI TAFOR BULAN " . strtoupper($start->translatedFormat('F Y')) . " - WITN MAIMUN SALEH SABANG"
+            );
         }
 
+        // 5. Simpan file ke disk public storage
+        $fileName = 'Verifikasi_TAF_' . $start->format('Y_m') . '.xlsx';
+        $outputPath = storage_path('app/public/' . $fileName);
+
         $writer = IOFactory::createWriter($spreadsheet, 'Xlsx');
+        $writer->setPreCalculateFormulas(false);
         $writer->save($outputPath);
 
-        return $outputPath;
+        return $fileName;
     }
 
     /**
@@ -94,15 +106,15 @@ class TafReportExcelService
         array $tafList,
         array $obsList
     ): void {
-        $targetBlocks = [0, 6, 12, 18]; // UTC hours
+        $targetBlocks = [0, 6, 12, 18]; // UTC Hours
         
         foreach ($targetBlocks as $index => $targetHour) {
-            $targetTime = new DateTime(sprintf('%04d-%02d-%02d %02d:00:00', $year, $month, $day, $targetHour), new DateTimeZone('UTC'));
+            $targetTime = new DateTime(
+                sprintf('%04d-%02d-%02d %02d:00:00', $year, $month, $day, $targetHour),
+                new DateTimeZone('UTC')
+            );
             
-            // Cari TAF yang berlaku untuk jam target ini
             $activeTaf = $this->findActiveTaf($tafList, $targetTime);
-            
-            // Cari Observation (METAR/SPECI) pada jam target
             $activeObs = $this->findObservation($obsList, $targetTime);
 
             if ($activeTaf && $activeObs) {
@@ -138,7 +150,6 @@ class TafReportExcelService
      */
     protected function evaluateSop(TafData $taf, ObservationData $obs, DateTime $targetTime): array
     {
-        // Cari kondisi TAF yang berlaku pada targetTime
         $group = $taf->groups[0];
         foreach ($taf->groups as $g) {
             if ($g->start <= $targetTime && $targetTime <= $g->end) {
@@ -165,13 +176,13 @@ class TafReportExcelService
         // B2. Gust
         $gustOk = ($e->gust === $a->gust) ? 1 : 0;
 
-        // C. Jarak Pandang (Visibility Class sama)
+        // C. Jarak Pandang (Visibility Class)
         $visOk = ($e->visibility !== null && $a->visibility !== null && $this->visClass($e->visibility) === $this->visClass($a->visibility)) ? 1 : 0;
 
         // D. Presipitasi / Cuaca
         $precipOk = ($e->precipCode === $a->precipCode || ($e->precipCode === 'NONE' && $a->precipCode === 'NONE')) ? 1 : 0;
 
-        // E. Jumlah Awan (Low vs High Cloud)
+        // E. Jumlah Awan
         $cloudOk = ($e->cloud === $a->cloud) ? 1 : 0;
 
         // F. Tinggi Dasar Awan / Ceiling
@@ -198,17 +209,14 @@ class TafReportExcelService
 
     protected function writeBlockToSheet(Worksheet $sheet, int $blockIndex, TafData $taf, ObservationData $obs, array $scores): void
     {
-        // Offset baris berdasarkan blok waktu (00, 06, 12, 18 UTC)
-        $baseRow = 7 + ($blockIndex * 12);
+        $baseRow = 11 + ($blockIndex * 6);
 
-        // Tulis TAF & OBS Raw
-        $sheet->setCellValue("B" . ($baseRow), $taf->raw);
-        $sheet->setCellValue("B" . ($baseRow + 3), $obs->raw);
+        $sheet->setCellValue("D" . $baseRow, $taf->raw);
+        $sheet->setCellValue("M" . $baseRow, $obs->raw);
 
-        // Tulis Nilai Skor SOP (1 / 0)
-        $cols = ['D', 'E', 'F', 'G', 'H', 'I', 'J'];
+        $cols = ['F', 'G', 'H', 'I', 'J', 'K', 'L'];
         foreach ($scores as $i => $score) {
-            $sheet->setCellValue($cols[$i] . ($baseRow + 5), $score);
+            $sheet->setCellValue($cols[$i] . $baseRow, $score);
         }
     }
 }
