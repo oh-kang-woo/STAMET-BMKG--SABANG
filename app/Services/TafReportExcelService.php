@@ -7,7 +7,6 @@ use App\DTOs\Taf\ObservationData;
 use Carbon\Carbon;
 use DateTime;
 use DateTimeZone;
-use DateInterval;
 use PhpOffice\PhpSpreadsheet\IOFactory;
 use PhpOffice\PhpSpreadsheet\Worksheet\Worksheet;
 
@@ -28,7 +27,7 @@ class TafReportExcelService
         }
 
         if (!file_exists($templatePath)) {
-            throw new \Exception("File template 'Verifikasi_Taf.xlsx' tidak ditemukan.");
+            throw new \Exception("File template 'Verifikasi_Taf.xlsx' atau 'Template Verif TAF.xlsx' tidak ditemukan.");
         }
 
         $spreadsheet = IOFactory::load($templatePath);
@@ -144,39 +143,46 @@ class TafReportExcelService
             $cond = $group->condition;
 
             // Tulis Change Group & Parameter TAF
-            $sheet->setCellValueExplicitByColumnAndRow(4, $row, $group->kind); // Col D
-            $sheet->setCellValueExplicitByColumnAndRow(6, $row, $cond->windDir ?? ''); // Col F
-            $sheet->setCellValueExplicitByColumnAndRow(7, $row, $cond->windSpeed ?? ''); // Col G
-            $sheet->setCellValueExplicitByColumnAndRow(8, $row, $cond->gust ? 'GUST' : 0); // Col H
-            $sheet->setCellValueExplicitByColumnAndRow(9, $row, $cond->visibility ?? ''); // Col I
-            $sheet->setCellValueExplicitByColumnAndRow(10, $row, $cond->precipCode ?? 'NONE'); // Col J
-            $sheet->setCellValueExplicitByColumnAndRow(11, $row, $cond->cloud ?? ''); // Col K
-            $sheet->setCellValueExplicitByColumnAndRow(12, $row, $cond->ceilingFt ?? ''); // Col L
+            $sheet->setCellValue("D{$row}", $group->kind);
+            $sheet->setCellValue("F{$row}", $cond->windDir ?? '');
+            $sheet->setCellValue("G{$row}", $cond->windSpeed ?? '');
+            $sheet->setCellValue("H{$row}", $cond->gust ? 'GUST' : 0);
+            $sheet->setCellValue("I{$row}", $cond->visibility ?? '');
+            $sheet->setCellValue("J{$row}", $cond->precipCode ?? 'NONE');
+            $sheet->setCellValue("K{$row}", $cond->cloud ?? '');
+            $sheet->setCellValue("L{$row}", $cond->ceilingFt ?? '');
         }
 
         if ($obs) {
             $a = $obs->condition;
             // Tulis METAR Raw & Nilai METAR Aktual
-            $sheet->setCellValueExplicitByColumnAndRow(13, $row, $obs->raw); // Col M
-            $sheet->setCellValueExplicitByColumnAndRow(14, $row, $a->windDir ?? ''); // Col N
-            $sheet->setCellValueExplicitByColumnAndRow(16, $row, $a->windSpeed ?? ''); // Col P
-            $sheet->setCellValueExplicitByColumnAndRow(18, $row, $a->gust ? 'GUST' : 0); // Col R
-            $sheet->setCellValueExplicitByColumnAndRow(20, $row, $a->visibility ?? ''); // Col T
-            $sheet->setCellValueExplicitByColumnAndRow(22, $row, $a->precipCode ?? 'NONE'); // Col V
-            $sheet->setCellValueExplicitByColumnAndRow(24, $row, $a->cloud ?? ''); // Col X
-            $sheet->setCellValueExplicitByColumnAndRow(26, $row, $a->ceilingFt ?? ''); // Col Z
+            $sheet->setCellValue("M{$row}", $obs->raw);
+            $sheet->setCellValue("N{$row}", $a->windDir ?? '');
+            $sheet->setCellValue("P{$row}", $a->windSpeed ?? '');
+            $sheet->setCellValue("R{$row}", $a->gust ? 'GUST' : 0);
+            $sheet->setCellValue("T{$row}", $a->visibility ?? '');
+            $sheet->setCellValue("V{$row}", $a->precipCode ?? 'NONE');
+            $sheet->setCellValue("X{$row}", $a->cloud ?? '');
+            $sheet->setCellValue("Z{$row}", $a->ceilingFt ?? '');
 
-            // Hitung & Tulis Skor Evaluasi (Col O, Q, S, U, W, Y, AA)
+            // Hitung & Tulis Skor Evaluasi (Kolom O, Q, S, U, W, Y, AA)
             if ($taf) {
                 $groups = $this->verifier->matchingGroups($taf, $targetTime);
                 $expectedGroup = end($groups);
                 $scores = $this->verifier->calculateScore($expectedGroup->condition, $a, $obs->raw);
 
-                $scoreCols = [15, 17, 19, 21, 23, 25, 27];
-                $scoreKeys = ['wind_dir', 'wind_speed', 'gust', 'visibility', 'precip', 'cloud', 'ceiling'];
+                $scoreCols = [
+                    'O' => 'wind_dir',
+                    'Q' => 'wind_speed',
+                    'S' => 'gust',
+                    'U' => 'visibility',
+                    'W' => 'precip',
+                    'Y' => 'cloud',
+                    'AA' => 'ceiling'
+                ];
 
-                foreach ($scoreCols as $idx => $colIdx) {
-                    $sheet->setCellValueExplicitByColumnAndRow($colIdx, $row, $scores[$scoreKeys[$idx]]);
+                foreach ($scoreCols as $col => $scoreKey) {
+                    $sheet->setCellValue("{$col}{$row}", $scores[$scoreKey]);
                 }
             }
         }
