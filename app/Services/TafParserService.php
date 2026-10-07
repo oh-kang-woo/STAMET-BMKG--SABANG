@@ -23,31 +23,30 @@ class TafParserService
             $m = ($totalMonth % 12) + 1;
 
             if (checkdate($m, $day, $y)) {
-                $dt = new DateTime();
-                $dt->setTimezone($utc);
+                $dt = new DateTime('now', $utc);
                 $dt->setDate($y, $m, $day);
                 $dt->setTime($hour, $minute, 0);
                 $candidates[] = $dt;
             }
         }
 
-        usort($candidates, function ($a, $b) use ($anchor) {
-            return abs($a->getTimestamp() - $anchor->getTimestamp()) <=> abs($b->getTimestamp() - $anchor->getTimestamp());
-        });
+        usort($candidates, fn($a, $b) => abs($a->getTimestamp() - $anchor->getTimestamp()) <=> abs($b->getTimestamp() - $anchor->getTimestamp()));
 
-        return $candidates[0];
+        return $candidates[0] ?? new DateTime('now', $utc);
     }
 
     public static function parseCondition(string $text): Condition
     {
         $c = new Condition();
 
+        // Wind Direction & Speed
         if (preg_match('/\b(VRB|\d{3})(\d{2,3})(G\d{2,3})?KT\b/i', $text, $m)) {
             $c->windDir = ($m[1] === 'VRB') ? 999 : (int)$m[1];
             $c->windSpeed = (int)$m[2];
             $c->gust = !empty($m[3]);
         }
 
+        // Visibility & Cloud
         if (preg_match('/\bCAVOK\b/i', $text)) {
             $c->visibility = 9999;
             $c->cloud = 'SKC';
@@ -67,9 +66,10 @@ class TafParserService
             }
         }
 
-        if (preg_match_all('/(?<![A-Z0-9])([+-]?(?:SH)?(?:RA|DZ|SN|SG|PL|GR|GS))(?![A-Z0-9])/i', $text, $m)) {
-            $rainTokens = array_filter($m[1], fn($w) => str_ends_with(strtoupper($w), 'RA'));
-            $c->precipCode = !empty($rainTokens) ? strtoupper(reset($rainTokens)) : 'NONE';
+        // Precipitation (Mendukung TSRA, SHRA, RA, DZ, dll)
+        if (preg_match_all('/(?<![A-Z0-9])([+-]?(?:TS|SH)?(?:RA|DZ|SN|SG|PL|GR|GS))(?![A-Z0-9])/i', $text, $m)) {
+            $rainTokens = array_filter($m[1], fn($w) => str_contains(strtoupper($w), 'RA'));
+            $c->precipCode = !empty($rainTokens) ? strtoupper(array_values($rainTokens)[0]) : 'NONE';
         } else {
             $c->precipCode = 'NONE';
         }
@@ -79,7 +79,7 @@ class TafParserService
 
     public static function parseTaf(string $raw, ?DateTime $anchor = null): ?TafData
     {
-        $raw = preg_replace('/\s+/', ' ', str_replace('=', ' ', $raw));
+        $raw = trim(preg_replace('/\s+/', ' ', str_replace('=', '', $raw)));
         $hasHeader = (bool)preg_match('/^FTID40\s+WITN\b/i', $raw);
 
         if (!preg_match('/\bTAF(?:\s+(?:AMD|COR))?\s+(WITN)\s+(\d{2})(\d{2})(\d{2})Z\s+(\d{2})(\d{2})\/(\d{2})(\d{2})/i', $raw, $m)) {
@@ -148,7 +148,7 @@ class TafParserService
 
     public static function parseObservation(string $raw, ?DateTime $anchor = null): ?ObservationData
     {
-        $raw = preg_replace('/\s+/', ' ', str_replace('=', ' ', $raw));
+        $raw = trim(preg_replace('/\s+/', ' ', str_replace('=', '', $raw)));
         if (!preg_match('/\b(METAR|SPECI)(?:\s+COR)?\s+WITN\s+(\d{2})(\d{2})(\d{2})Z\b/i', $raw, $m)) {
             return null;
         }

@@ -12,12 +12,15 @@ use PhpOffice\PhpSpreadsheet\Worksheet\Worksheet;
 
 class TafReportExcelService
 {
-    /**
-     * Entry point utama yang dipanggil oleh VerifyTafPage.php
-     */
+    protected TafVerifierService $verifier;
+
+    public function __construct(TafVerifierService $verifier)
+    {
+        $this->verifier = $verifier;
+    }
+
     public function generate(Carbon $start, array $tafs, array $observations): string
     {
-        // Cari lokasi file template
         $templatePath = storage_path('app/templates/Verifikasi_Taf.xlsx');
         if (!file_exists($templatePath)) {
             $templatePath = base_path('Template Verif TAF.xlsx');
@@ -33,12 +36,7 @@ class TafReportExcelService
         $month = $start->month;
         $daysInMonth = $start->daysInMonth;
 
-        // 1. Data dari BmkgAviationApiService sudah berupa Objek TafData dan ObservationData
-        // Jadi kita bisa langsung menggunakannya tanpa perlu di-parse ulang.
-        $tafList = $tafs;
-        $obsList = $observations;
-
-        // 2. Hapus sheet tanggal yang melebihi jumlah hari dalam bulan tersebut
+        // 1. Hapus sheet tanggal melebihi batas hari bulan ini
         for ($day = $daysInMonth + 1; $day <= 31; $day++) {
             $sheetName = (string)$day;
             $sheetToRemove = $spreadsheet->getSheetByName($sheetName);
@@ -48,16 +46,16 @@ class TafReportExcelService
             }
         }
 
-        // 3. Isikan data verifikasi harian (Sheet 1 s.d. 28/30/31)
+        // 2. Isikan data verifikasi harian
         for ($day = 1; $day <= $daysInMonth; $day++) {
             $sheetName = (string)$day;
             $sheet = $spreadsheet->getSheetByName($sheetName);
             if ($sheet !== null) {
-                $this->processDaySheet($sheet, $year, $month, $day, $tafList, $obsList);
+                $this->processDaySheet($sheet, $year, $month, $day, $tafs, $observations);
             }
         }
 
-        // 4. Update Judul pada Sheet "rekap 1 bulan"
+        // 3. Update Judul Sheet Rekap
         $rekapSheet = $spreadsheet->getSheetByName('rekap 1 bulan');
         if ($rekapSheet !== null) {
             $rekapSheet->setCellValue(
@@ -66,7 +64,7 @@ class TafReportExcelService
             );
         }
 
-        // 5. Simpan file ke storage public
+        // 4. Simpan File Output
         $fileName = 'Verifikasi_TAF_' . $start->format('Y_m') . '.xlsx';
         $outputPath = storage_path('app/public/' . $fileName);
 
@@ -77,9 +75,6 @@ class TafReportExcelService
         return $fileName;
     }
 
-    /**
-     * Memproses dan mengisi data verifikasi harian ke dalam sheet.
-     */
     protected function processDaySheet(
         Worksheet $sheet,
         int $year,
@@ -102,10 +97,8 @@ class TafReportExcelService
             $activeTaf = $this->findActiveTaf($tafList, $targetTime);
             $activeObs = $this->findObservation($obsList, $targetTime);
 
-            if ($activeTaf && $activeObs) {
-                $scores = $this->evaluateSop($activeTaf, $activeObs, $targetTime);
-                $this->writeBlockToSheet($sheet, $index, $activeTaf, $activeObs, $scores);
-            }
+            // Tulis ke sheet Excel meskipun salah satu data TAF / METAR kosong
+            $this->writeBlockToSheet($sheet, $index, $activeTaf, $activeObs, $targetTime);
         }
     }
 
@@ -123,71 +116,50 @@ class TafReportExcelService
     {
         foreach ($obsList as $obs) {
             $diff = abs($obs->at->getTimestamp() - $targetTime->getTimestamp());
-            if ($diff <= 1800) {
+            if ($diff <= 1800) { // Toleransi 30 menit
                 return $obs;
             }
         }
         return null;
     }
 
-    protected function evaluateSop(TafData $taf, ObservationData $obs, DateTime $targetTime): array
-    {
-        $group = $taf->groups[0];
-        foreach ($taf->groups as $g) {
-            if ($g->start <= $targetTime && $targetTime <= $g->end) {
-                $group = $g;
-            }
-        }
-
-        $e = $group->condition;
-        $a = $obs->condition;
-
-        $windDirOk = 0;
-        if ($e->windDir !== null && $a->windDir !== null) {
-            $delta = abs($e->windDir - $a->windDir);
-            $delta = min($delta, 360 - $delta);
-            if ($delta <= 60 || ($a->windSpeed !== null && $a->windSpeed < 10)) {
-                $windDirOk = 1;
-            }
-        }
-
-        $windSpdOk = ($e->windSpeed !== null && $a->windSpeed !== null && abs($e->windSpeed - $a->windSpeed) <= 10) ? 1 : 0;
-        $gustOk = ($e->gust === $a->gust) ? 1 : 0;
-        $visOk = ($e->visibility !== null && $a->visibility !== null && $this->visClass($e->visibility) === $this->visClass($a->visibility)) ? 1 : 0;
-        $precipOk = ($e->precipCode === $a->precipCode || ($e->precipCode === 'NONE' && $a->precipCode === 'NONE')) ? 1 : 0;
-        $cloudOk = ($e->cloud === $a->cloud) ? 1 : 0;
-
-        $ceilingOk = 0;
-        if ($e->ceilingFt !== null && $a->ceilingFt !== null) {
-            if ($e->ceilingFt < 1000) {
-                $ceilingOk = abs($e->ceilingFt - $a->ceilingFt) <= 100 ? 1 : 0;
-            } else {
-                $ceilingOk = abs($e->ceilingFt - $a->ceilingFt) <= (0.30 * $e->ceilingFt) ? 1 : 0;
-            }
-        }
-
-        return [$windDirOk, $windSpdOk, $gustOk, $visOk, $precipOk, $cloudOk, $ceilingOk];
-    }
-
-    protected function visClass(int $vis): int
-    {
-        if ($vis < 800) return 1;
-        if ($vis < 1500) return 2;
-        if ($vis < 3000) return 3;
-        if ($vis < 5000) return 4;
-        return 5;
-    }
-
-    protected function writeBlockToSheet(Worksheet $sheet, int $blockIndex, TafData $taf, ObservationData $obs, array $scores): void
-    {
+    protected function writeBlockToSheet(
+        Worksheet $sheet, 
+        int $blockIndex, 
+        ?TafData $taf, 
+        ?ObservationData $obs, 
+        DateTime $targetTime
+    ): void {
         $baseRow = 11 + ($blockIndex * 6);
 
-        $sheet->setCellValue("D" . $baseRow, $taf->raw);
-        $sheet->setCellValue("M" . $baseRow, $obs->raw);
+        if ($taf) {
+            $sheet->setCellValue("D" . $baseRow, $taf->raw);
+        }
 
-        $cols = ['F', 'G', 'H', 'I', 'J', 'K', 'L'];
-        foreach ($scores as $i => $score) {
-            $sheet->setCellValue($cols[$i] . $baseRow, $score);
+        if ($obs) {
+            $sheet->setCellValue("M" . $baseRow, $obs->raw);
+        }
+
+        // Jika TAF dan METAR lengkap, lakukan evaluasi SOP
+        if ($taf && $obs) {
+            $groups = $this->verifier->matchingGroups($taf, $targetTime);
+            $expectedGroup = end($groups); // Ambil grup kondisi aktif (e.g. TEMPO/BECMG/GENERAL)
+            
+            $scores = $this->verifier->calculateScore($expectedGroup->condition, $obs->condition, $obs->raw);
+
+            $cols = [
+                'F' => $scores['wind_dir'],
+                'G' => $scores['wind_speed'],
+                'H' => $scores['gust'],
+                'I' => $scores['visibility'],
+                'J' => $scores['precip'],
+                'K' => $scores['cloud'],
+                'L' => $scores['ceiling'],
+            ];
+
+            foreach ($cols as $col => $val) {
+                $sheet->setCellValue($col . $baseRow, $val);
+            }
         }
     }
 }

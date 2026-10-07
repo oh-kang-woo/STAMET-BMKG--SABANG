@@ -12,44 +12,54 @@ class BmkgAviationApiService
 
     public function collectData(string $icao, Carbon $start, Carbon $end): array
     {
+        // Carbon sudah merupakan turunan dari DateTime, tidak perlu ->toDateTime()
         $anchor = $start->copy()->addDays(15);
+        
         $payload = [
             'icao' => $icao,
             'start' => $start->format('d/m/Y H:i'),
             'end' => $end->format('d/m/Y H:i'),
         ];
 
-        // 1. Scraping data TAF mentah dari portal BMKG
+        // 1. Scraping TAF
         $tafResponse = Http::withoutVerifying()
             ->timeout(60)
             ->withHeaders([
-                'User-Agent' => 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/120.0.0.0 Safari/537.36'
+                'User-Agent' => 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/120.0.0.0 Safari/537.36',
+                'Referer' => 'https://web-aviation.bmkg.go.id/'
             ])
             ->asForm()
             ->post($this->tafUrl, $payload);
 
-        preg_match_all('/(FTID40\s+'.$icao.'.*?=)/s', $tafResponse->body(), $tafMatches);
+        $cleanTafBody = strip_tags(str_replace(['<br>', '<br/>', '<br />'], "\n", $tafResponse->body()));
+        
+        preg_match_all('/(?:FTID40\s+'.$icao.'.*?=|(?:TAF(?:\s+(?:AMD|COR))?\s+'.$icao.'.*?=))/s', $cleanTafBody, $tafMatches);
+        
         $tafs = [];
         foreach ($tafMatches[0] ?? [] as $raw) {
-            $parsed = TafParserService::parseTaf($raw, $anchor->toDateTime());
+            $parsed = TafParserService::parseTaf($raw, $anchor);
             if ($parsed) {
                 $tafs[] = $parsed;
             }
         }
 
-        // 2. Scraping data METAR / SPECI mentah dari portal BMKG
+        // 2. Scraping METAR / SPECI
         $metarResponse = Http::withoutVerifying()
             ->timeout(60)
             ->withHeaders([
-                'User-Agent' => 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/120.0.0.0 Safari/537.36'
+                'User-Agent' => 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/120.0.0.0 Safari/537.36',
+                'Referer' => 'https://web-aviation.bmkg.go.id/'
             ])
             ->asForm()
             ->post($this->metarUrl, $payload);
 
-        preg_match_all('/((?:METAR|SPECI)(?:\s+COR)?\s+'.$icao.'.*?=)/s', $metarResponse->body(), $metarMatches);
+        $cleanMetarBody = strip_tags(str_replace(['<br>', '<br/>', '<br />'], "\n", $metarResponse->body()));
+        
+        preg_match_all('/((?:METAR|SPECI)(?:\s+COR)?\s+'.$icao.'.*?=)/s', $cleanMetarBody, $metarMatches);
+        
         $observations = [];
         foreach ($metarMatches[0] ?? [] as $raw) {
-            $parsed = TafParserService::parseObservation($raw, $anchor->toDateTime());
+            $parsed = TafParserService::parseObservation($raw, $anchor);
             if ($parsed) {
                 $observations[] = $parsed;
             }

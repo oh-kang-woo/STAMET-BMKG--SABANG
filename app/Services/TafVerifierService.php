@@ -103,7 +103,7 @@ class TafVerifierService
 
         $permanent = array_filter($taf->groups, fn($g) => in_array($g->kind, ['GENERAL', 'BECMG', 'FM']) && $g->start <= $at);
         usort($permanent, fn($a, $b) => $b->start <=> $a->start);
-        $baseGroup = !empty($permanent) ? reset($permanent) : $taf->groups[0];
+        $baseGroup = !empty($permanent) ? array_values($permanent)[0] : $taf->groups[0];
 
         $base = ($baseGroup->kind === 'BECMG' && $at < $baseGroup->end)
             ? $baseGroup
@@ -112,7 +112,7 @@ class TafVerifierService
         $transient = array_filter($taf->groups, fn($g) => in_array($g->kind, ['TEMPO', 'PROB30 TEMPO', 'PROB40 TEMPO', 'PROB30', 'PROB40', 'INTER']) && $g->start <= $at && $at < $g->end);
         if (!empty($transient)) {
             usort($transient, fn($a, $b) => $b->start <=> $a->start);
-            return [$base, reset($transient)];
+            return [$base, array_values($transient)[0]];
         }
 
         return [$base];
