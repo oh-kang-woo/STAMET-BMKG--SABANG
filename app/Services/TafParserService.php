@@ -4,6 +4,15 @@ namespace App\Services;
 
 use Carbon\Carbon;
 
+class TafParserService
+{
+    public function parseCondition(string $text): TafCondition
+    {
+        $verifier = app(TafVerifierService::class);
+        return $verifier->parseCondition($text);
+    }
+}
+
 class TafCondition
 {
     public ?int $windDir = null;
