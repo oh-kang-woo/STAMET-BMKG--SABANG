@@ -7,6 +7,7 @@ use App\Services\TafVerifierService;
 use Carbon\Carbon;
 use Filament\Pages\Page;
 use Illuminate\Support\Facades\Cache;
+use PhpOffice\PhpSpreadsheet\IOFactory;
 
 class VerifyTafPage extends Page
 {
@@ -135,66 +136,69 @@ class VerifyTafPage extends Page
     }
 
     /**
-     * Export Laporan Verifikasi TAF ke Excel/CSV
+     * Export Laporan ke Template Excel Resmi BMKG (.xlsx)
      */
     public function exportExcel()
     {
-        $data = $this->realtimeData;
-        $filename = "Verifikasi_TAF_{$this->icao}_" . Carbon::parse($this->selectedDate)->format('Y-m-d') . ".csv";
+        $templatePath = storage_path('app/templates/TemplateVerifTAF.xlsx');
 
-        return response()->streamDownload(function () use ($data) {
-            $handle = fopen('php://output', 'w');
+        if (!file_exists($templatePath)) {
+            $this->addError('export', 'Template file Excel tidak ditemukan di storage/app/templates/TemplateVerifTAF.xlsx');
+            return;
+        }
 
-            // Header BOM agar Microsoft Excel membaca UTF-8
-            fputs($handle, "\xEF\xBB\xBF");
+        $date = Carbon::parse($this->selectedDate);
+        $dayNumber = (string) $date->day; // Mengambil angka hari (1-31) sesuai nama sheet
+        $monthYear = $date->translatedFormat('F Y');
 
-            // Ringkasan Header
-            fputcsv($handle, ['LAPORAN VERIFIKASI REALTIME TAFOR']);
-            fputcsv($handle, ['Stasiun', $this->icao]);
-            fputcsv($handle, ['Tanggal', $this->selectedDate]);
-            fputcsv($handle, ['Akurasi Total', $data['summary']['accuracy'] . '%']);
-            fputcsv($handle, ['Slot Sesuai (Passed)', $data['summary']['passed']]);
-            fputcsv($handle, ['Slot Deviasi (Failed)', $data['summary']['failed']]);
-            fputcsv($handle, []);
+        // Load Template
+        $spreadsheet = IOFactory::load($templatePath);
 
-            // Judul Kolom Data
-            fputcsv($handle, [
-                'Jam (UTC)',
-                'Group',
-                'Status Stream',
-                'Sandi Raw TAF',
-                'Sandi Raw METAR',
-                'Arah Angin',
-                'Kecepatan Angin',
-                'Gust',
-                'Visibility',
-                'Cuaca',
-                'Awan',
-                'Ceiling'
-            ]);
+        // Update Sheet Rekap Bulan jika ada
+        if ($spreadsheet->sheetExists('rekap 1 bulan')) {
+            $rekapSheet = $spreadsheet->getSheetByName('rekap 1 bulan');
+            $rekapSheet->setCellValue('A2', "VERIFIKASI TAF BULAN " . strtoupper($monthYear));
+        }
 
-            // Isi Baris Data
-            foreach ($data['rows'] as $row) {
-                $scores = $row['scores'];
-                fputcsv($handle, [
-                    $row['time'],
-                    $row['group'],
-                    $row['scores'] ? 'Sesuai SOP' : 'Data Belum Lengkap',
-                    $row['taf_raw'],
-                    $row['metar_raw'],
-                    $scores['wind_dir'] ?? '-',
-                    $scores['wind_speed'] ?? '-',
-                    $scores['gust'] ?? '-',
-                    $scores['visibility'] ?? '-',
-                    $scores['precip'] ?? '-',
-                    $scores['cloud'] ?? '-',
-                    $scores['ceiling'] ?? '-'
-                ]);
+        // Isikan Data ke Sheet Tanggal terkait (Sheet '1'..'31')
+        if ($spreadsheet->sheetExists($dayNumber)) {
+            $sheet = $spreadsheet->getSheetByName($dayNumber);
+            
+            // Header Info
+            $sheet->setCellValue('B3', "BULAN : " . strtoupper($date->translatedFormat('F')));
+            $sheet->setCellValue('E3', "TAHUN : " . $date->year);
+
+            // Tulis baris verifikasi ke template (Mulai baris 7)
+            $startRow = 7;
+            $data = array_reverse($this->realtimeData['rows']); // Urut dari 00:00 UTC
+
+            foreach ($data as $index => $row) {
+                $currentRow = $startRow + $index;
+                
+                // Isi Kolom METAR & TAF RAW
+                $sheet->setCellValue("M{$currentRow}", $row['metar_raw']);
+                $sheet->setCellValue("D{$currentRow}", $row['group']);
+                
+                // Jika ada skor evaluasi, masukkan ke kolom parameter
+                if ($row['scores']) {
+                    $sheet->setCellValue("O{$currentRow}", $row['scores']['wind_dir']);
+                    $sheet->setCellValue("Q{$currentRow}", $row['scores']['wind_speed']);
+                    $sheet->setCellValue("S{$currentRow}", $row['scores']['gust']);
+                    $sheet->setCellValue("U{$currentRow}", $row['scores']['visibility']);
+                    $sheet->setCellValue("W{$currentRow}", $row['scores']['precip']);
+                    $sheet->setCellValue("Y{$currentRow}", $row['scores']['cloud']);
+                    $sheet->setCellValue("AA{$currentRow}", $row['scores']['ceiling']);
+                }
             }
+        }
 
-            fclose($handle);
+        $filename = "Verifikasi_TAF_{$this->icao}_" . $date->format('Y-m-d') . ".xlsx";
+
+        return response()->streamDownload(function () use ($spreadsheet) {
+            $writer = IOFactory::createWriter($spreadsheet, 'Xlsx');
+            $writer->save('php://output');
         }, $filename, [
-            'Content-Type' => 'text/csv; charset=UTF-8',
+            'Content-Type' => 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
         ]);
     }
 }
