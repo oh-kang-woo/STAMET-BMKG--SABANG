@@ -2,74 +2,121 @@
 
 namespace App\Services;
 
-use App\DTOs\Taf\Condition;
-use App\DTOs\Taf\Group;
-use App\DTOs\Taf\ObservationData;
-use App\DTOs\Taf\TafData;
-use DateTime;
-use DateTimeZone;
-use DateInterval;
+use Carbon\Carbon;
 
-class TafParserService
+class TafCondition
 {
-    public static function resolveDate(int $day, int $hour, int $minute, DateTime $anchor): DateTime
+    public ?int $windDir = null;     // 999 berarti VRB (Variable)
+    public ?int $windSpeed = null;   // Dalam Knot
+    public ?bool $gust = false;
+    public ?int $visibility = null;  // Dalam Meter
+    public ?string $precipCode = 'NONE'; // +RA, RA, -RA, atau NONE
+    public ?string $cloud = null;    // SKC, FEW, SCT, BKN, OVC
+    public ?int $ceilingFt = null;   // Tinggi dasar awan dalam Feet
+
+    public function merged(TafCondition $newer): TafCondition
     {
-        $candidates = [];
-        $utc = new DateTimeZone('UTC');
+        $out = clone $this;
+        if ($newer->windDir !== null) $out->windDir = $newer->windDir;
+        if ($newer->windSpeed !== null) $out->windSpeed = $newer->windSpeed;
+        if ($newer->gust !== null) $out->gust = $newer->gust;
+        if ($newer->visibility !== null) $out->visibility = $newer->visibility;
+        if ($newer->precipCode !== null && $newer->precipCode !== '') $out->precipCode = $newer->precipCode;
+        if ($newer->cloud !== null && $newer->cloud !== '') $out->cloud = $newer->cloud;
+        if ($newer->ceilingFt !== null) $out->ceilingFt = $newer->ceilingFt;
 
-        for ($offset = -2; $offset <= 2; $offset++) {
-            $totalMonth = ($anchor->format('Y') * 12) + ($anchor->format('n') - 1) + $offset;
-            $y = intdiv($totalMonth, 12);
-            $m = ($totalMonth % 12) + 1;
-
-            if (checkdate($m, $day, $y)) {
-                $dt = new DateTime('now', $utc);
-                $dt->setDate($y, $m, $day);
-                $dt->setTime($hour, $minute, 0);
-                $candidates[] = $dt;
-            }
-        }
-
-        usort($candidates, fn($a, $b) => abs($a->getTimestamp() - $anchor->getTimestamp()) <=> abs($b->getTimestamp() - $anchor->getTimestamp()));
-
-        return $candidates[0] ?? new DateTime('now', $utc);
+        return $out;
     }
 
-    public static function parseCondition(string $text): Condition
+    public static function from(mixed $data): TafCondition
     {
-        $c = new Condition();
-
-        // Wind Direction & Speed
-        if (preg_match('/\b(VRB|\d{3})(\d{2,3})(G\d{2,3})?KT\b/i', $text, $m)) {
-            $c->windDir = ($m[1] === 'VRB') ? 999 : (int)$m[1];
-            $c->windSpeed = (int)$m[2];
-            $c->gust = !empty($m[3]);
+        if ($data instanceof TafCondition) {
+            return $data;
         }
 
-        // Visibility & Cloud
+        $c = new TafCondition();
+        if (is_array($data)) {
+            $c->windDir = $data['wind_dir'] ?? $data['windDir'] ?? null;
+            $c->windSpeed = $data['wind_speed'] ?? $data['windSpeed'] ?? null;
+            $c->gust = $data['gust'] ?? false;
+            $c->visibility = $data['visibility'] ?? null;
+            $c->precipCode = $data['precip_code'] ?? $data['precipCode'] ?? 'NONE';
+            $c->cloud = $data['cloud'] ?? null;
+            $c->ceilingFt = $data['ceiling_ft'] ?? $data['ceilingFt'] ?? null;
+        } elseif (is_object($data)) {
+            $c->windDir = $data->wind_dir ?? $data->windDir ?? null;
+            $c->windSpeed = $data->wind_speed ?? $data->windSpeed ?? null;
+            $c->gust = $data->gust ?? false;
+            $c->visibility = $data->visibility ?? null;
+            $c->precipCode = $data->precip_code ?? $data->precipCode ?? 'NONE';
+            $c->cloud = $data->cloud ?? null;
+            $c->ceilingFt = $data->ceiling_ft ?? $data->ceilingFt ?? null;
+        }
+
+        return $c;
+    }
+
+    public function toArray(): array
+    {
+        return [
+            'wind_dir' => $this->windDir,
+            'wind_speed' => $this->windSpeed,
+            'gust' => $this->gust,
+            'visibility' => $this->visibility,
+            'precip_code' => $this->precipCode,
+            'cloud' => $this->cloud,
+            'ceiling_ft' => $this->ceilingFt,
+        ];
+    }
+}
+
+class TafVerifierService
+{
+    /**
+     * Parse teks TAF / METAR menjadi objek TafCondition sesuai kriteria SOP BMKG.
+     */
+    public function parseCondition(string $text): TafCondition
+    {
+        $c = new TafCondition();
+
+        // 1. Parser Angin (Arah, Kecepatan, Gust)
+        if (preg_match('/\b(VRB|\d{3})(\d{2,3})(G\d{2,3})?KT\b/i', $text, $wind)) {
+            $c->windDir = (strtoupper($wind[1]) === 'VRB') ? 999 : (int) $wind[1];
+            $c->windSpeed = (int) $wind[2];
+            $c->gust = !empty($wind[3]);
+        }
+
+        // 2. Parser Visibility & Cloud (Aturan CAVOK & Lapisan Awan Terendah)
         if (preg_match('/\bCAVOK\b/i', $text)) {
             $c->visibility = 9999;
             $c->cloud = 'SKC';
             $c->ceilingFt = 9999;
         } else {
-            if (preg_match('/(?:^|\s)(\d{4})(?:\s|$)/', $text, $m)) {
-                $c->visibility = (int)$m[1];
+            if (preg_match('/(?:^|\s)(\d{4})(?:\s|$)/', $text, $vis)) {
+                $c->visibility = (int) $vis[1];
             }
 
-            if (preg_match_all('/\b(FEW|SCT|BKN|OVC)(\d{3})(?:CB|TCU)?\b/i', $text, $m, PREG_SET_ORDER)) {
-                usort($m, fn($a, $b) => (int)$a[2] <=> (int)$b[2]);
-                $c->cloud = strtoupper($m[0][1]);
-                $c->ceilingFt = (int)$m[0][2] * 100;
+            if (preg_match_all('/\b(FEW|SCT|BKN|OVC)(\d{3})(?:CB|TCU)?\b/i', $text, $matches, PREG_SET_ORDER)) {
+                // SOP menggunakan lapisan awan terendah untuk verifikasi jumlah & tinggi awan
+                usort($matches, fn($a, $b) => (int) $a[2] <=> (int) $b[2]);
+                $c->cloud = strtoupper($matches[0][1]);
+                $c->ceilingFt = ((int) $matches[0][2]) * 100;
             } elseif (preg_match('/\b(NSC|NCD|SKC)\b/i', $text)) {
                 $c->cloud = 'SKC';
                 $c->ceilingFt = 9999;
             }
         }
 
-        // Precipitation (Mendukung TSRA, SHRA, RA, DZ, dll)
-        if (preg_match_all('/(?<![A-Z0-9])([+-]?(?:TS|SH)?(?:RA|DZ|SN|SG|PL|GR|GS))(?![A-Z0-9])/i', $text, $m)) {
-            $rainTokens = array_filter($m[1], fn($w) => str_contains(strtoupper($w), 'RA'));
-            $c->precipCode = !empty($rainTokens) ? strtoupper(array_values($rainTokens)[0]) : 'NONE';
+        // 3. Parser Cuaca Signifikan / Presipitasi (Hujan)
+        if (preg_match_all('/(?<![A-Z0-9])([+-]?(?:SH)?(?:RA|DZ|SN|SG|PL|GR|GS))(?![A-Z0-9])/i', $text, $wxMatches)) {
+            $rainTokens = array_values(array_filter($wxMatches[1], fn($w) => str_ends_with(strtoupper($w), 'RA')));
+            if (!empty($rainTokens)) {
+                $c->precipCode = strtoupper($rainTokens[0]);
+            } else {
+                $c->precipCode = 'NONE';
+            }
+        } elseif (preg_match('/\bNSW\b/i', $text)) {
+            $c->precipCode = 'NONE';
         } else {
             $c->precipCode = 'NONE';
         }
@@ -77,85 +124,301 @@ class TafParserService
         return $c;
     }
 
-    public static function parseTaf(string $raw, ?DateTime $anchor = null): ?TafData
+    /**
+     * Klasifikasi Kelas Visibility SOP BMKG (1 - 5)
+     */
+    public function visibilityClass(?int $v): ?int
     {
-        $raw = trim(preg_replace('/\s+/', ' ', str_replace('=', '', $raw)));
-        $hasHeader = (bool)preg_match('/^FTID40\s+WITN\b/i', $raw);
-
-        if (!preg_match('/\bTAF(?:\s+(?:AMD|COR))?\s+(WITN)\s+(\d{2})(\d{2})(\d{2})Z\s+(\d{2})(\d{2})\/(\d{2})(\d{2})/i', $raw, $m)) {
-            return null;
-        }
-
-        $anchor = $anchor ?? new DateTime('now', new DateTimeZone('UTC'));
-        $start = self::resolveDate((int)$m[5], (int)$m[6], 0, $anchor);
-        $issued = self::resolveDate((int)$m[2], (int)$m[3], (int)$m[4], $start);
-        $end = (clone $start)->add(new DateInterval('P1D'))->setTime((int)$m[8], 0, 0);
-
-        $body = trim(substr($raw, strpos($raw, $m[0]) + strlen($m[0])));
-        preg_match_all('/\b(BECMG|TEMPO|INTER|PROB30|PROB40|FM\d{6})\b/i', $body, $markers, PREG_OFFSET_CAPTURE);
-
-        $chunks = [];
-        if (!empty($markers[0])) {
-            $chunks[] = ['GENERAL', trim(substr($body, 0, $markers[0][0][1]))];
-            for ($i = 0; $i < count($markers[0]); $i++) {
-                $label = strtoupper($markers[0][$i][0]);
-                $startPos = $markers[0][$i][1];
-                $nextPos = ($i + 1 < count($markers[0])) ? $markers[0][$i + 1][1] : strlen($body);
-
-                if (in_array($label, ['PROB30', 'PROB40']) && $i + 1 < count($markers[0]) && strtoupper($markers[0][$i + 1][0]) === 'TEMPO') {
-                    $label .= ' TEMPO';
-                    $nextPos = ($i + 2 < count($markers[0])) ? $markers[0][$i + 2][1] : strlen($body);
-                    $i++;
-                }
-
-                $chunks[] = [$label, trim(substr($body, $startPos, $nextPos - $startPos))];
-            }
-        } else {
-            $chunks[] = ['GENERAL', $body];
-        }
-
-        $base = self::parseCondition($chunks[0][1]);
-        if ($base->gust === null) $base->gust = false;
-
-        $groups = [new Group('GENERAL', $start, $end, $base)];
-        $current = $base;
-
-        for ($k = 1; $k < count($chunks); $k++) {
-            [$kind, $piece] = $chunks[$k];
-            if (preg_match('/FM(\d{2})(\d{2})(\d{2})/i', $piece, $fm)) {
-                $gs = self::resolveDate((int)$fm[1], (int)$fm[2], (int)$fm[3], $start);
-                $ge = $end;
-            } elseif (preg_match('/(\d{2})(\d{2})\/(\d{2})(\d{2})/', $piece, $tm)) {
-                $gs = self::resolveDate((int)$tm[1], (int)$tm[2], 0, $start);
-                $ge = self::resolveDate((int)$tm[3], (int)$tm[4], 0, (clone $gs)->add(new DateInterval('P1D')));
-            } else {
-                continue;
-            }
-
-            $condText = preg_replace('/^\s*(?:PROB30|PROB40)?\s*(?:BECMG|TEMPO|INTER)?\s*(?:FM\d{6})?\b/i', '', $piece);
-            $update = self::parseCondition($condText);
-            $target = $current->merged($update);
-            $effectiveKind = str_contains($piece, 'FM') ? 'FM' : $kind;
-
-            $groups[] = new Group($effectiveKind, $gs, $ge, $target, clone $current);
-            if (in_array($effectiveKind, ['BECMG', 'FM'])) {
-                $current = $target;
-            }
-        }
-
-        return new TafData($raw, $issued, $start, $end, $groups, str_contains($raw, 'COR'), str_contains($raw, 'AMD'), !$hasHeader);
+        if ($v === null) return null;
+        if ($v < 800) return 1;
+        if ($v < 1500) return 2;
+        if ($v < 3000) return 3;
+        if ($v <= 5000) return 4;
+        return 5;
     }
 
-    public static function parseObservation(string $raw, ?DateTime $anchor = null): ?ObservationData
+    /**
+     * Hitung Skor Evaluasi Standar 7 Parameter SOP BMKG (Nilai 1 / 0)
+     */
+    public function calculateScore(mixed $expected, mixed $actual, string $rawObs = ''): array
     {
-        $raw = trim(preg_replace('/\s+/', ' ', str_replace('=', '', $raw)));
-        if (!preg_match('/\b(METAR|SPECI)(?:\s+COR)?\s+WITN\s+(\d{2})(\d{2})(\d{2})Z\b/i', $raw, $m)) {
-            return null;
+        $exp = TafCondition::from($expected);
+        $act = TafCondition::from($actual);
+
+        $windDirScore = $this->windDirOk($exp, $act, $rawObs);
+        $windSpeedScore = ($exp->windSpeed !== null && $act->windSpeed !== null && abs($exp->windSpeed - $act->windSpeed) <= 10) ? 1 : 0;
+        $gustScore = ($exp->gust === $act->gust) ? 1 : 0;
+        $visScore = ($exp->visibility !== null && $act->visibility !== null && $this->visibilityClass($exp->visibility) === $this->visibilityClass($act->visibility)) ? 1 : 0;
+        $precipScore = $this->precipOk($exp, $act);
+        $cloudScore = $this->cloudOk($exp, $act);
+
+        if ($exp->ceilingFt === null || $act->ceilingFt === null) {
+            $ceilingScore = 0;
+        } elseif ($exp->ceilingFt < 1000) {
+            $ceilingScore = (abs($exp->ceilingFt - $act->ceilingFt) <= 100) ? 1 : 0;
+        } else {
+            $ceilingScore = (abs($exp->ceilingFt - $act->ceilingFt) <= 0.30 * $exp->ceilingFt) ? 1 : 0;
         }
 
-        $at = self::resolveDate((int)$m[2], (int)$m[3], (int)$m[4], $anchor ?? new DateTime('now', new DateTimeZone('UTC')));
-        $cond = self::parseCondition($raw);
+        return [
+            'wind_dir' => $windDirScore,
+            'wind_speed' => $windSpeedScore,
+            'gust' => $gustScore,
+            'visibility' => $visScore,
+            'precip' => $precipScore,
+            'cloud' => $cloudScore,
+            'ceiling' => $ceilingScore,
+        ];
+    }
 
-        return new ObservationData($raw, $at, strtoupper($m[1]), $cond, str_contains($raw, 'COR'));
+    /**
+     * Hitung Skor Evaluasi Aturan Transisi BECMG (Di antara kondisi awal dan target)
+     */
+    public function calculateScoreBecmg(mixed $previous, mixed $target, mixed $actual, string $rawObs = ''): array
+    {
+        $prev = TafCondition::from($previous);
+        $tgt = TafCondition::from($target);
+        $act = TafCondition::from($actual);
+
+        // Arah Angin
+        $windDirScore = 0;
+        if ($prev->windDir !== null && $tgt->windDir !== null && $act->windDir !== null) {
+            $windDirScore = ($this->windDirOk($prev, $act, $rawObs) || $this->windDirOk($tgt, $act, $rawObs)) ? 1 : 0;
+        }
+
+        // Kecepatan Angin
+        $windSpeedScore = $this->betweenNumber($act->windSpeed, $prev->windSpeed, $tgt->windSpeed) ? 1 : 0;
+
+        // Gust
+        $gustScore = ($act->gust === $prev->gust || $act->gust === $tgt->gust) ? 1 : 0;
+
+        // Visibility
+        $visScore = ($this->betweenNumber($act->visibility, $prev->visibility, $tgt->visibility) ||
+            ($act->visibility !== null && in_array($this->visibilityClass($act->visibility), [
+                $this->visibilityClass($prev->visibility),
+                $this->visibilityClass($tgt->visibility)
+            ]))) ? 1 : 0;
+
+        // Presipitasi
+        $precipScore = ($this->precipOk($prev, $act) || $this->precipOk($tgt, $act)) ? 1 : 0;
+
+        // Cloud Amount
+        $cloudScore = $this->cloudAmountBetween($prev, $tgt, $act);
+
+        // Ceiling
+        if ($act->ceilingFt === null) {
+            $ceilingScore = 0;
+        } else {
+            $prevScore = $this->calculateScore($prev, $act, $rawObs);
+            $tgtScore = $this->calculateScore($tgt, $act, $rawObs);
+
+            $ceilingScore = ($this->betweenNumber($act->ceilingFt, $prev->ceilingFt, $tgt->ceilingFt) ||
+                $prevScore['ceiling'] || $tgtScore['ceiling']) ? 1 : 0;
+        }
+
+        return [
+            'wind_dir' => $windDirScore,
+            'wind_speed' => $windSpeedScore,
+            'gust' => $gustScore,
+            'visibility' => $visScore,
+            'precip' => $precipScore,
+            'cloud' => $cloudScore,
+            'ceiling' => $ceilingScore,
+        ];
+    }
+
+    /**
+     * Evaluasi otomatis berdasarkan waktu pengamatan (Mendeteksi BECMG aktif vs Standar)
+     */
+    public function scoreForTime(mixed $taf, mixed $obs): array
+    {
+        $obsAt = is_array($obs) ? Carbon::parse($obs['at']) : ($obs->at instanceof Carbon ? $obs->at : Carbon::parse($obs->at));
+        $rawObs = is_array($obs) ? ($obs['raw'] ?? '') : ($obs->raw ?? '');
+        $actCondition = is_array($obs) ? ($obs['condition'] ?? $obs) : ($obs->condition ?? $obs);
+
+        $groups = $this->matchingGroups($taf, $obsAt);
+        $group = end($groups);
+
+        $isBecmgActive = ($group->kind === 'BECMG' && !empty($group->previous) && $obsAt < $group->end);
+
+        if ($isBecmgActive) {
+            $scores = $this->calculateScoreBecmg($group->previous, $group->condition, $actCondition, $rawObs);
+        } else {
+            $scores = $this->calculateScore($group->condition, $actCondition, $rawObs);
+        }
+
+        return [
+            'group' => $group,
+            'scores' => $scores,
+        ];
+    }
+
+    /**
+     * Mencari Change Group TAF yang berlaku pada waktu pengamatan ($at)
+     */
+    public function matchingGroups(mixed $taf, Carbon $at): array
+    {
+        $validStart = Carbon::parse($taf->validStart ?? $taf['validStart'] ?? $taf->valid_start);
+        $validEnd = Carbon::parse($taf->validEnd ?? $taf['validEnd'] ?? $taf->valid_end);
+        $groups = $taf->groups ?? $taf['groups'] ?? [];
+
+        if ($at < $validStart || $at > $validEnd) {
+            return [$groups[0] ?? $this->makeDefaultGroup($validStart, $validEnd)];
+        }
+
+        // Cari grup permanen (GENERAL, BECMG, FM)
+        $permanent = array_filter($groups, function ($g) use ($at) {
+            $gKind = is_object($g) ? $g->kind : $g['kind'];
+            $gStart = Carbon::parse(is_object($g) ? $g->start : $g['start']);
+            return in_array($gKind, ['GENERAL', 'BECMG', 'FM']) && $gStart <= $at;
+        });
+
+        if (!empty($permanent)) {
+            usort($permanent, function ($a, $b) {
+                $aStart = Carbon::parse(is_object($a) ? $a->start : $a['start']);
+                $bStart = Carbon::parse(is_object($b) ? $b->start : $b['start']);
+                return $aStart <=> $bStart;
+            });
+            $baseGroup = end($permanent);
+        } else {
+            $baseGroup = $groups[0] ?? $this->makeDefaultGroup($validStart, $validEnd);
+        }
+
+        $baseKind = is_object($baseGroup) ? $baseGroup->kind : $baseGroup['kind'];
+        $baseEnd = Carbon::parse(is_object($baseGroup) ? $baseGroup->end : $baseGroup['end']);
+
+        if ($baseKind === 'BECMG' && $at < $baseEnd) {
+            $base = $baseGroup;
+        } else {
+            $kind = ($baseKind === 'GENERAL') ? 'GENERAL' : $baseKind;
+            $start = Carbon::parse(is_object($baseGroup) ? $baseGroup->start : $baseGroup['start']);
+            $condition = is_object($baseGroup) ? $baseGroup->condition : $baseGroup['condition'];
+            $previous = is_object($baseGroup) ? ($baseGroup->previous ?? null) : ($baseGroup['previous'] ?? null);
+
+            $base = (object) [
+                'kind' => $kind,
+                'start' => $start,
+                'end' => $validEnd,
+                'condition' => $condition,
+                'previous' => $previous,
+            ];
+        }
+
+        // Cari grup sementara (TEMPO, PROB30/40, INTER)
+        $transient = array_filter($groups, function ($g) use ($at) {
+            $gKind = is_object($g) ? $g->kind : $g['kind'];
+            $gStart = Carbon::parse(is_object($g) ? $g->start : $g['start']);
+            $gEnd = Carbon::parse(is_object($g) ? $g->end : $g['end']);
+
+            return in_array($gKind, ['TEMPO', 'PROB30 TEMPO', 'PROB40 TEMPO', 'PROB30', 'PROB40', 'INTER'])
+                && ($gStart <= $at && $at < $gEnd);
+        });
+
+        if (!empty($transient)) {
+            usort($transient, function ($a, $b) {
+                $aStart = Carbon::parse(is_object($a) ? $a->start : $a['start']);
+                $bStart = Carbon::parse(is_object($b) ? $b->start : $b['start']);
+                return $aStart <=> $bStart;
+            });
+            return [$base, end($transient)];
+        }
+
+        return [$base];
+    }
+
+    // ==================== HELPER SOP PRIVATE METHODS ====================
+
+    private function windDirOk(TafCondition $expected, TafCondition $actual, string $raw): int
+    {
+        if ($expected->windDir === null || $actual->windDir === null) return 0;
+        if ($expected->windDir === 999 && $actual->windDir === 999) return 1;
+
+        if ($expected->windDir === 999) {
+            return ($actual->windSpeed < 10 || str_contains($raw, 'TS') || str_contains($raw, 'CB')) ? 1 : 0;
+        }
+
+        if ($actual->windDir === 999) {
+            return ($expected->windSpeed < 10 && $actual->windSpeed < 10) ? 1 : 0;
+        }
+
+        $delta = abs($expected->windDir - $actual->windDir);
+        $delta = min($delta, 360 - $delta);
+
+        if ($delta <= 60) return 1;
+
+        return ($actual->windSpeed < 10) ? 1 : 0;
+    }
+
+    private function cloudOk(TafCondition $expected, TafCondition $actual): int
+    {
+        if ($actual->ceilingFt !== null && $actual->ceilingFt > 4921) { // 1500 m
+            return 1;
+        }
+
+        if (!$expected->cloud || !$actual->cloud) return 0;
+
+        $low = ['SKC', 'FEW', 'SCT'];
+        $high = ['BKN', 'OVC'];
+
+        $eLow = in_array($expected->cloud, $low);
+        $aLow = in_array($actual->cloud, $low);
+        $eHigh = in_array($expected->cloud, $high);
+        $aHigh = in_array($actual->cloud, $high);
+
+        return (($eLow && $aLow) || ($eHigh && $aHigh)) ? 1 : 0;
+    }
+
+    private function rainClass(?string $code): string
+    {
+        if (!$code || $code === 'NONE') return 'NONE';
+        $code = strtoupper($code);
+        if (str_starts_with($code, '+')) return 'HEAVY';
+        if (str_starts_with($code, '-')) return 'LIGHT';
+        return 'MODERATE';
+    }
+
+    private function precipOk(TafCondition $expected, TafCondition $actual): int
+    {
+        $e = $this->rainClass($expected->precipCode);
+        $a = $this->rainClass($actual->precipCode);
+
+        if ($e === 'HEAVY') return ($a === 'HEAVY') ? 1 : 0;
+        if ($e === 'MODERATE') return in_array($a, ['MODERATE', 'HEAVY']) ? 1 : 0;
+
+        return in_array($a, ['NONE', 'LIGHT']) ? 1 : 0;
+    }
+
+    private function cloudAmountBetween(TafCondition $previous, TafCondition $target, TafCondition $actual): int
+    {
+        $order = ['SKC' => 0, 'FEW' => 1, 'SCT' => 2, 'BKN' => 3, 'OVC' => 4];
+
+        if (!isset($order[$previous->cloud], $order[$target->cloud], $order[$actual->cloud])) {
+            return 0;
+        }
+
+        $lo = min($order[$previous->cloud], $order[$target->cloud]);
+        $hi = max($order[$previous->cloud], $order[$target->cloud]);
+        $actVal = $order[$actual->cloud];
+
+        return ($actVal >= $lo && $actVal <= $hi) ? 1 : 0;
+    }
+
+    private function betweenNumber(?int $value, ?int $a, ?int $b): bool
+    {
+        if ($value === null || $a === null || $b === null) return false;
+        $lo = min($a, $b);
+        $hi = max($a, $b);
+        return ($value >= $lo && $value <= $hi);
+    }
+
+    private function makeDefaultGroup(Carbon $start, Carbon $end): object
+    {
+        return (object) [
+            'kind' => 'GENERAL',
+            'start' => $start,
+            'end' => $end,
+            'condition' => new TafCondition(),
+            'previous' => null,
+        ];
     }
 }
