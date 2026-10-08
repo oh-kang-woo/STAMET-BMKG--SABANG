@@ -15,6 +15,7 @@ class VerifyTafPage extends Page
     protected static ?string $navigationIcon = 'heroicon-o-check-badge';
     protected static string $view = 'filament.pages.verify-taf-page';
     protected static ?string $title = 'Verifikasi TAF Realtime';
+    protected static ?string $slug = 'verify-taf-page';
 
     public string $selectedDate;
     public string $icao = 'WITN';
@@ -44,7 +45,6 @@ class VerifyTafPage extends Page
             $now = now();
             $maxHour = $date->isToday() ? $now->hour : 23;
 
-            // Variabel Statistik
             $totalEvaluated = 0;
             $passedSlots = 0;
             $failedSlots = 0;
@@ -86,8 +86,11 @@ class VerifyTafPage extends Page
                     if ($activeTaf && $activeObs) {
                         $groups = $verifier->matchingGroups($activeTaf, $targetTime);
                         $expectedGroup = end($groups);
-                        $groupKind = $expectedGroup->kind;
-                        $scores = $verifier->calculateScore($expectedGroup->condition, $activeObs->condition, $activeObs->raw);
+                        
+                        $groupKind = is_object($expectedGroup) ? $expectedGroup->kind : $expectedGroup['kind'];
+                        $groupCond = is_object($expectedGroup) ? $expectedGroup->condition : $expectedGroup['condition'];
+
+                        $scores = $verifier->calculateScore($groupCond, $activeObs->condition, $activeObs->raw);
 
                         $totalEvaluated++;
                         $sumScore = array_sum($scores);
@@ -136,15 +139,10 @@ class VerifyTafPage extends Page
         Cache::forget($cacheKey);
     }
 
-    /**
-     * Export Laporan ke Template Excel Resmi BMKG (.xlsx)
-     */
     public function exportExcel()
     {
-        // Mencegah PHP Timeout saat memproses file Excel besar
         set_time_limit(120);
 
-        // Variasi lokasi file template di folder storage/app/templates/
         $possiblePaths = [
             storage_path('app/templates/TemplateVerifTAF.xlsx'),
             storage_path('app/templates/Verifikasi_Taf.xlsx'),
@@ -170,38 +168,31 @@ class VerifyTafPage extends Page
         }
 
         $date = Carbon::parse($this->selectedDate);
-        $dayNumber = (string) $date->day; // Angka hari 1-31 sesuai nama sheet
+        $dayNumber = (string) $date->day;
         $monthYear = $date->translatedFormat('F Y');
 
         try {
-            // Load Template Excel
             $spreadsheet = IOFactory::load($templatePath);
 
-            // Update Header Sheet Rekap Bulan jika ada
             $rekapSheet = $spreadsheet->getSheetByName('rekap 1 bulan');
             if ($rekapSheet) {
                 $rekapSheet->setCellValue('A2', "VERIFIKASI TAF BULAN " . strtoupper($monthYear));
             }
 
-            // Isikan Data ke Sheet Tanggal terkait (Sheet '1'..'31')
             $sheet = $spreadsheet->getSheetByName($dayNumber);
             if ($sheet) {
-                // Header Informasi
                 $sheet->setCellValue('B3', "BULAN : " . strtoupper($date->translatedFormat('F')));
                 $sheet->setCellValue('E3', "TAHUN : " . $date->year);
 
-                // Tulis baris verifikasi ke template mulai baris 7
                 $startRow = 7;
-                $data = array_reverse($this->realtimeData['rows']); // Urutkan dari 00:00 UTC
+                $data = array_reverse($this->realtimeData['rows']);
 
                 foreach ($data as $index => $row) {
                     $currentRow = $startRow + $index;
                     
-                    // Isi data METAR RAW & Change Group
                     $sheet->setCellValue("M{$currentRow}", $row['metar_raw']);
                     $sheet->setCellValue("D{$currentRow}", $row['group']);
                     
-                    // Jika ada skor evaluasi, tulis ke kolom parameter terkait
                     if ($row['scores']) {
                         $sheet->setCellValue("O{$currentRow}", $row['scores']['wind_dir']);
                         $sheet->setCellValue("Q{$currentRow}", $row['scores']['wind_speed']);
@@ -218,10 +209,7 @@ class VerifyTafPage extends Page
 
             return response()->streamDownload(function () use ($spreadsheet) {
                 $writer = IOFactory::createWriter($spreadsheet, 'Xlsx');
-                
-                // PENTING: Matikan kalkulasi rumus di PHP agar proses export berjalan instan tanpa timeout
                 $writer->setPreCalculateFormulas(false);
-                
                 $writer->save('php://output');
             }, $filename, [
                 'Content-Type' => 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',

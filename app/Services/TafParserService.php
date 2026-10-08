@@ -6,13 +6,13 @@ use Carbon\Carbon;
 
 class TafCondition
 {
-    public ?int $windDir = null;     // 999 berarti VRB (Variable)
-    public ?int $windSpeed = null;   // Dalam Knot
+    public ?int $windDir = null;
+    public ?int $windSpeed = null;
     public ?bool $gust = false;
-    public ?int $visibility = null;  // Dalam Meter
-    public ?string $precipCode = 'NONE'; // +RA, RA, -RA, atau NONE
-    public ?string $cloud = null;    // SKC, FEW, SCT, BKN, OVC
-    public ?int $ceilingFt = null;   // Tinggi dasar awan dalam Feet
+    public ?int $visibility = null;
+    public ?string $precipCode = 'NONE';
+    public ?string $cloud = null;
+    public ?int $ceilingFt = null;
 
     public function merged(TafCondition $newer): TafCondition
     {
@@ -72,21 +72,16 @@ class TafCondition
 
 class TafVerifierService
 {
-    /**
-     * Parse teks TAF / METAR menjadi objek TafCondition sesuai kriteria SOP BMKG.
-     */
     public function parseCondition(string $text): TafCondition
     {
         $c = new TafCondition();
 
-        // 1. Parser Angin (Arah, Kecepatan, Gust)
         if (preg_match('/\b(VRB|\d{3})(\d{2,3})(G\d{2,3})?KT\b/i', $text, $wind)) {
             $c->windDir = (strtoupper($wind[1]) === 'VRB') ? 999 : (int) $wind[1];
             $c->windSpeed = (int) $wind[2];
             $c->gust = !empty($wind[3]);
         }
 
-        // 2. Parser Visibility & Cloud (Aturan CAVOK & Lapisan Awan Terendah)
         if (preg_match('/\bCAVOK\b/i', $text)) {
             $c->visibility = 9999;
             $c->cloud = 'SKC';
@@ -97,7 +92,6 @@ class TafVerifierService
             }
 
             if (preg_match_all('/\b(FEW|SCT|BKN|OVC)(\d{3})(?:CB|TCU)?\b/i', $text, $matches, PREG_SET_ORDER)) {
-                // SOP menggunakan lapisan awan terendah untuk verifikasi jumlah & tinggi awan
                 usort($matches, fn($a, $b) => (int) $a[2] <=> (int) $b[2]);
                 $c->cloud = strtoupper($matches[0][1]);
                 $c->ceilingFt = ((int) $matches[0][2]) * 100;
@@ -107,7 +101,6 @@ class TafVerifierService
             }
         }
 
-        // 3. Parser Cuaca Signifikan / Presipitasi (Hujan)
         if (preg_match_all('/(?<![A-Z0-9])([+-]?(?:SH)?(?:RA|DZ|SN|SG|PL|GR|GS))(?![A-Z0-9])/i', $text, $wxMatches)) {
             $rainTokens = array_values(array_filter($wxMatches[1], fn($w) => str_ends_with(strtoupper($w), 'RA')));
             if (!empty($rainTokens)) {
@@ -124,9 +117,6 @@ class TafVerifierService
         return $c;
     }
 
-    /**
-     * Klasifikasi Kelas Visibility SOP BMKG (1 - 5)
-     */
     public function visibilityClass(?int $v): ?int
     {
         if ($v === null) return null;
@@ -137,9 +127,6 @@ class TafVerifierService
         return 5;
     }
 
-    /**
-     * Hitung Skor Evaluasi Standar 7 Parameter SOP BMKG (Nilai 1 / 0)
-     */
     public function calculateScore(mixed $expected, mixed $actual, string $rawObs = ''): array
     {
         $exp = TafCondition::from($expected);
@@ -171,41 +158,29 @@ class TafVerifierService
         ];
     }
 
-    /**
-     * Hitung Skor Evaluasi Aturan Transisi BECMG (Di antara kondisi awal dan target)
-     */
     public function calculateScoreBecmg(mixed $previous, mixed $target, mixed $actual, string $rawObs = ''): array
     {
         $prev = TafCondition::from($previous);
         $tgt = TafCondition::from($target);
         $act = TafCondition::from($actual);
 
-        // Arah Angin
         $windDirScore = 0;
         if ($prev->windDir !== null && $tgt->windDir !== null && $act->windDir !== null) {
             $windDirScore = ($this->windDirOk($prev, $act, $rawObs) || $this->windDirOk($tgt, $act, $rawObs)) ? 1 : 0;
         }
 
-        // Kecepatan Angin
         $windSpeedScore = $this->betweenNumber($act->windSpeed, $prev->windSpeed, $tgt->windSpeed) ? 1 : 0;
-
-        // Gust
         $gustScore = ($act->gust === $prev->gust || $act->gust === $tgt->gust) ? 1 : 0;
 
-        // Visibility
         $visScore = ($this->betweenNumber($act->visibility, $prev->visibility, $tgt->visibility) ||
             ($act->visibility !== null && in_array($this->visibilityClass($act->visibility), [
                 $this->visibilityClass($prev->visibility),
                 $this->visibilityClass($tgt->visibility)
             ]))) ? 1 : 0;
 
-        // Presipitasi
         $precipScore = ($this->precipOk($prev, $act) || $this->precipOk($tgt, $act)) ? 1 : 0;
-
-        // Cloud Amount
         $cloudScore = $this->cloudAmountBetween($prev, $tgt, $act);
 
-        // Ceiling
         if ($act->ceilingFt === null) {
             $ceilingScore = 0;
         } else {
@@ -227,9 +202,6 @@ class TafVerifierService
         ];
     }
 
-    /**
-     * Evaluasi otomatis berdasarkan waktu pengamatan (Mendeteksi BECMG aktif vs Standar)
-     */
     public function scoreForTime(mixed $taf, mixed $obs): array
     {
         $obsAt = is_array($obs) ? Carbon::parse($obs['at']) : ($obs->at instanceof Carbon ? $obs->at : Carbon::parse($obs->at));
@@ -239,12 +211,17 @@ class TafVerifierService
         $groups = $this->matchingGroups($taf, $obsAt);
         $group = end($groups);
 
-        $isBecmgActive = ($group->kind === 'BECMG' && !empty($group->previous) && $obsAt < $group->end);
+        $gKind = is_object($group) ? $group->kind : ($group['kind'] ?? 'GENERAL');
+        $gEnd = Carbon::parse(is_object($group) ? $group->end : $group['end']);
+        $gPrev = is_object($group) ? ($group->previous ?? null) : ($group['previous'] ?? null);
+        $gCond = is_object($group) ? $group->condition : $group['condition'];
+
+        $isBecmgActive = ($gKind === 'BECMG' && !empty($gPrev) && $obsAt < $gEnd);
 
         if ($isBecmgActive) {
-            $scores = $this->calculateScoreBecmg($group->previous, $group->condition, $actCondition, $rawObs);
+            $scores = $this->calculateScoreBecmg($gPrev, $gCond, $actCondition, $rawObs);
         } else {
-            $scores = $this->calculateScore($group->condition, $actCondition, $rawObs);
+            $scores = $this->calculateScore($gCond, $actCondition, $rawObs);
         }
 
         return [
@@ -253,9 +230,6 @@ class TafVerifierService
         ];
     }
 
-    /**
-     * Mencari Change Group TAF yang berlaku pada waktu pengamatan ($at)
-     */
     public function matchingGroups(mixed $taf, Carbon $at): array
     {
         $validStart = Carbon::parse($taf->validStart ?? $taf['validStart'] ?? $taf->valid_start);
@@ -266,7 +240,6 @@ class TafVerifierService
             return [$groups[0] ?? $this->makeDefaultGroup($validStart, $validEnd)];
         }
 
-        // Cari grup permanen (GENERAL, BECMG, FM)
         $permanent = array_filter($groups, function ($g) use ($at) {
             $gKind = is_object($g) ? $g->kind : $g['kind'];
             $gStart = Carbon::parse(is_object($g) ? $g->start : $g['start']);
@@ -304,7 +277,6 @@ class TafVerifierService
             ];
         }
 
-        // Cari grup sementara (TEMPO, PROB30/40, INTER)
         $transient = array_filter($groups, function ($g) use ($at) {
             $gKind = is_object($g) ? $g->kind : $g['kind'];
             $gStart = Carbon::parse(is_object($g) ? $g->start : $g['start']);
@@ -325,8 +297,6 @@ class TafVerifierService
 
         return [$base];
     }
-
-    // ==================== HELPER SOP PRIVATE METHODS ====================
 
     private function windDirOk(TafCondition $expected, TafCondition $actual, string $raw): int
     {
@@ -351,7 +321,7 @@ class TafVerifierService
 
     private function cloudOk(TafCondition $expected, TafCondition $actual): int
     {
-        if ($actual->ceilingFt !== null && $actual->ceilingFt > 4921) { // 1500 m
+        if ($actual->ceilingFt !== null && $actual->ceilingFt > 4921) {
             return 1;
         }
 
