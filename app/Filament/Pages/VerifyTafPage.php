@@ -133,4 +133,68 @@ class VerifyTafPage extends Page
         $cacheKey = "taf_realtime_v2_{$this->icao}_" . Carbon::parse($this->selectedDate)->format('Y-m-d');
         Cache::forget($cacheKey);
     }
+
+    /**
+     * Export Laporan Verifikasi TAF ke Excel/CSV
+     */
+    public function exportExcel()
+    {
+        $data = $this->realtimeData;
+        $filename = "Verifikasi_TAF_{$this->icao}_" . Carbon::parse($this->selectedDate)->format('Y-m-d') . ".csv";
+
+        return response()->streamDownload(function () use ($data) {
+            $handle = fopen('php://output', 'w');
+
+            // Header BOM agar Microsoft Excel membaca UTF-8
+            fputs($handle, "\xEF\xBB\xBF");
+
+            // Ringkasan Header
+            fputcsv($handle, ['LAPORAN VERIFIKASI REALTIME TAFOR']);
+            fputcsv($handle, ['Stasiun', $this->icao]);
+            fputcsv($handle, ['Tanggal', $this->selectedDate]);
+            fputcsv($handle, ['Akurasi Total', $data['summary']['accuracy'] . '%']);
+            fputcsv($handle, ['Slot Sesuai (Passed)', $data['summary']['passed']]);
+            fputcsv($handle, ['Slot Deviasi (Failed)', $data['summary']['failed']]);
+            fputcsv($handle, []);
+
+            // Judul Kolom Data
+            fputcsv($handle, [
+                'Jam (UTC)',
+                'Group',
+                'Status Stream',
+                'Sandi Raw TAF',
+                'Sandi Raw METAR',
+                'Arah Angin',
+                'Kecepatan Angin',
+                'Gust',
+                'Visibility',
+                'Cuaca',
+                'Awan',
+                'Ceiling'
+            ]);
+
+            // Isi Baris Data
+            foreach ($data['rows'] as $row) {
+                $scores = $row['scores'];
+                fputcsv($handle, [
+                    $row['time'],
+                    $row['group'],
+                    $row['scores'] ? 'Sesuai SOP' : 'Data Belum Lengkap',
+                    $row['taf_raw'],
+                    $row['metar_raw'],
+                    $scores['wind_dir'] ?? '-',
+                    $scores['wind_speed'] ?? '-',
+                    $scores['gust'] ?? '-',
+                    $scores['visibility'] ?? '-',
+                    $scores['precip'] ?? '-',
+                    $scores['cloud'] ?? '-',
+                    $scores['ceiling'] ?? '-'
+                ]);
+            }
+
+            fclose($handle);
+        }, $filename, [
+            'Content-Type' => 'text/csv; charset=UTF-8',
+        ]);
+    }
 }
