@@ -5,6 +5,7 @@ namespace App\Filament\Pages;
 use App\Services\BmkgAviationApiService;
 use App\Services\TafVerifierService;
 use Carbon\Carbon;
+use Filament\Notifications\Notification;
 use Filament\Pages\Page;
 use Illuminate\Support\Facades\Cache;
 use PhpOffice\PhpSpreadsheet\IOFactory;
@@ -140,65 +141,91 @@ class VerifyTafPage extends Page
      */
     public function exportExcel()
     {
-        $templatePath = storage_path('app/templates/TemplateVerifTAF.xlsx');
+        // Daftar variasi nama file template di folder storage/app/templates/
+        $possiblePaths = [
+            storage_path('app/templates/Verifikasi_Taf.xlsx'),
+            storage_path('app/templates/Verifikasi_TAF.xlsx'),
+            storage_path('app/templates/TemplateVerifTAF.xlsx'),
+            storage_path('app/templates/TemplateVerifTAF (1).xlsx'),
+        ];
 
-        if (!file_exists($templatePath)) {
-            $this->addError('export', 'Template file Excel tidak ditemukan di storage/app/templates/TemplateVerifTAF.xlsx');
+        $templatePath = null;
+        foreach ($possiblePaths as $path) {
+            if (file_exists($path)) {
+                $templatePath = $path;
+                break;
+            }
+        }
+
+        if (!$templatePath) {
+            Notification::make()
+                ->title('File Template Tidak Ditemukan')
+                ->body('Pastikan file template Excel ada di folder storage/app/templates/ (seperti Verifikasi_Taf.xlsx atau TemplateVerifTAF.xlsx)')
+                ->danger()
+                ->send();
             return;
         }
 
         $date = Carbon::parse($this->selectedDate);
-        $dayNumber = (string) $date->day; // Mengambil angka hari (1-31) sesuai nama sheet
+        $dayNumber = (string) $date->day; // Angka hari 1-31 sesuai nama sheet
         $monthYear = $date->translatedFormat('F Y');
 
-        // Load Template
-        $spreadsheet = IOFactory::load($templatePath);
+        try {
+            // Load Template Excel
+            $spreadsheet = IOFactory::load($templatePath);
 
-        // Update Sheet Rekap Bulan jika ada
-        if ($spreadsheet->sheetExists('rekap 1 bulan')) {
-            $rekapSheet = $spreadsheet->getSheetByName('rekap 1 bulan');
-            $rekapSheet->setCellValue('A2', "VERIFIKASI TAF BULAN " . strtoupper($monthYear));
-        }
+            // Update Header Sheet Rekap Bulan jika ada
+            if ($spreadsheet->sheetExists('rekap 1 bulan')) {
+                $rekapSheet = $spreadsheet->getSheetByName('rekap 1 bulan');
+                $rekapSheet->setCellValue('A2', "VERIFIKASI TAF BULAN " . strtoupper($monthYear));
+            }
 
-        // Isikan Data ke Sheet Tanggal terkait (Sheet '1'..'31')
-        if ($spreadsheet->sheetExists($dayNumber)) {
-            $sheet = $spreadsheet->getSheetByName($dayNumber);
-            
-            // Header Info
-            $sheet->setCellValue('B3', "BULAN : " . strtoupper($date->translatedFormat('F')));
-            $sheet->setCellValue('E3', "TAHUN : " . $date->year);
-
-            // Tulis baris verifikasi ke template (Mulai baris 7)
-            $startRow = 7;
-            $data = array_reverse($this->realtimeData['rows']); // Urut dari 00:00 UTC
-
-            foreach ($data as $index => $row) {
-                $currentRow = $startRow + $index;
+            // Isikan Data ke Sheet Tanggal terkait
+            if ($spreadsheet->sheetExists($dayNumber)) {
+                $sheet = $spreadsheet->getSheetByName($dayNumber);
                 
-                // Isi Kolom METAR & TAF RAW
-                $sheet->setCellValue("M{$currentRow}", $row['metar_raw']);
-                $sheet->setCellValue("D{$currentRow}", $row['group']);
-                
-                // Jika ada skor evaluasi, masukkan ke kolom parameter
-                if ($row['scores']) {
-                    $sheet->setCellValue("O{$currentRow}", $row['scores']['wind_dir']);
-                    $sheet->setCellValue("Q{$currentRow}", $row['scores']['wind_speed']);
-                    $sheet->setCellValue("S{$currentRow}", $row['scores']['gust']);
-                    $sheet->setCellValue("U{$currentRow}", $row['scores']['visibility']);
-                    $sheet->setCellValue("W{$currentRow}", $row['scores']['precip']);
-                    $sheet->setCellValue("Y{$currentRow}", $row['scores']['cloud']);
-                    $sheet->setCellValue("AA{$currentRow}", $row['scores']['ceiling']);
+                // Header Informasi
+                $sheet->setCellValue('B3', "BULAN : " . strtoupper($date->translatedFormat('F')));
+                $sheet->setCellValue('E3', "TAHUN : " . $date->year);
+
+                // Tulis baris verifikasi ke template mulai baris 7
+                $startRow = 7;
+                $data = array_reverse($this->realtimeData['rows']); // Urutkan dari 00:00 UTC
+
+                foreach ($data as $index => $row) {
+                    $currentRow = $startRow + $index;
+                    
+                    // Isi data METAR RAW & Change Group
+                    $sheet->setCellValue("M{$currentRow}", $row['metar_raw']);
+                    $sheet->setCellValue("D{$currentRow}", $row['group']);
+                    
+                    // Jika ada skor evaluasi, tulis ke kolom parameter terkait
+                    if ($row['scores']) {
+                        $sheet->setCellValue("O{$currentRow}", $row['scores']['wind_dir']);
+                        $sheet->setCellValue("Q{$currentRow}", $row['scores']['wind_speed']);
+                        $sheet->setCellValue("S{$currentRow}", $row['scores']['gust']);
+                        $sheet->setCellValue("U{$currentRow}", $row['scores']['visibility']);
+                        $sheet->setCellValue("W{$currentRow}", $row['scores']['precip']);
+                        $sheet->setCellValue("Y{$currentRow}", $row['scores']['cloud']);
+                        $sheet->setCellValue("AA{$currentRow}", $row['scores']['ceiling']);
+                    }
                 }
             }
+
+            $filename = "Verifikasi_TAF_{$this->icao}_" . $date->format('Y-m-d') . ".xlsx";
+
+            return response()->streamDownload(function () use ($spreadsheet) {
+                $writer = IOFactory::createWriter($spreadsheet, 'Xlsx');
+                $writer->save('php://output');
+            }, $filename, [
+                'Content-Type' => 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+            ]);
+        } catch (\Exception $e) {
+            Notification::make()
+                ->title('Gagal Mengunduh Laporan')
+                ->body($e->getMessage())
+                ->danger()
+                ->send();
         }
-
-        $filename = "Verifikasi_TAF_{$this->icao}_" . $date->format('Y-m-d') . ".xlsx";
-
-        return response()->streamDownload(function () use ($spreadsheet) {
-            $writer = IOFactory::createWriter($spreadsheet, 'Xlsx');
-            $writer->save('php://output');
-        }, $filename, [
-            'Content-Type' => 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-        ]);
     }
 }
