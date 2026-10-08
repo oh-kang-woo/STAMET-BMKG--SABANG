@@ -141,11 +141,11 @@ class VerifyTafPage extends Page
      */
     public function exportExcel()
     {
-        // Daftar variasi nama file template di folder storage/app/templates/
+        // Variasi lokasi template di folder storage/app/templates/
         $possiblePaths = [
+            storage_path('app/templates/TemplateVerifTAF.xlsx'),
             storage_path('app/templates/Verifikasi_Taf.xlsx'),
             storage_path('app/templates/Verifikasi_TAF.xlsx'),
-            storage_path('app/templates/TemplateVerifTAF.xlsx'),
             storage_path('app/templates/TemplateVerifTAF (1).xlsx'),
         ];
 
@@ -160,7 +160,7 @@ class VerifyTafPage extends Page
         if (!$templatePath) {
             Notification::make()
                 ->title('File Template Tidak Ditemukan')
-                ->body('Pastikan file template Excel ada di folder storage/app/templates/ (seperti Verifikasi_Taf.xlsx atau TemplateVerifTAF.xlsx)')
+                ->body('Pastikan file template Excel ada di folder storage/app/templates/ (seperti TemplateVerifTAF.xlsx)')
                 ->danger()
                 ->send();
             return;
@@ -175,15 +175,14 @@ class VerifyTafPage extends Page
             $spreadsheet = IOFactory::load($templatePath);
 
             // Update Header Sheet Rekap Bulan jika ada
-            if ($spreadsheet->sheetExists('rekap 1 bulan')) {
-                $rekapSheet = $spreadsheet->getSheetByName('rekap 1 bulan');
+            $rekapSheet = $spreadsheet->getSheetByName('rekap 1 bulan');
+            if ($rekapSheet) {
                 $rekapSheet->setCellValue('A2', "VERIFIKASI TAF BULAN " . strtoupper($monthYear));
             }
 
-            // Isikan Data ke Sheet Tanggal terkait
-            if ($spreadsheet->sheetExists($dayNumber)) {
-                $sheet = $spreadsheet->getSheetByName($dayNumber);
-                
+            // Isikan Data ke Sheet Tanggal terkait (Sheet '1'..'31')
+            $sheet = $spreadsheet->getSheetByName($dayNumber);
+            if ($sheet) {
                 // Header Informasi
                 $sheet->setCellValue('B3', "BULAN : " . strtoupper($date->translatedFormat('F')));
                 $sheet->setCellValue('E3', "TAHUN : " . $date->year);
