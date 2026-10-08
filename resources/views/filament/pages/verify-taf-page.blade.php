@@ -33,8 +33,14 @@
                         <span class="font-mono font-bold text-emerald-600 dark:text-emerald-400">WITN</span>
                     </div>
 
+                    {{-- Tombol Refresh / Sync --}}
                     <x-filament::button wire:click="refreshData" icon="heroicon-m-arrow-path" size="sm">
                         Sync Data
+                    </x-filament::button>
+
+                    {{-- Tombol Export Excel / Download Report --}}
+                    <x-filament::button wire:click="exportExcel" icon="heroicon-m-arrow-down-tray" color="success" size="sm">
+                        Download Excel
                     </x-filament::button>
                 </div>
             </div>
