@@ -141,7 +141,10 @@ class VerifyTafPage extends Page
      */
     public function exportExcel()
     {
-        // Variasi lokasi template di folder storage/app/templates/
+        // Mencegah PHP Timeout saat memproses file Excel besar
+        set_time_limit(120);
+
+        // Variasi lokasi file template di folder storage/app/templates/
         $possiblePaths = [
             storage_path('app/templates/TemplateVerifTAF.xlsx'),
             storage_path('app/templates/Verifikasi_Taf.xlsx'),
@@ -160,7 +163,7 @@ class VerifyTafPage extends Page
         if (!$templatePath) {
             Notification::make()
                 ->title('File Template Tidak Ditemukan')
-                ->body('Pastikan file template Excel ada di folder storage/app/templates/ (seperti TemplateVerifTAF.xlsx)')
+                ->body('Pastikan file template Excel ada di folder storage/app/templates/')
                 ->danger()
                 ->send();
             return;
@@ -215,6 +218,10 @@ class VerifyTafPage extends Page
 
             return response()->streamDownload(function () use ($spreadsheet) {
                 $writer = IOFactory::createWriter($spreadsheet, 'Xlsx');
+                
+                // PENTING: Matikan kalkulasi rumus di PHP agar proses export berjalan instan tanpa timeout
+                $writer->setPreCalculateFormulas(false);
+                
                 $writer->save('php://output');
             }, $filename, [
                 'Content-Type' => 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
