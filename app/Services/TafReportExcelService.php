@@ -163,11 +163,7 @@ class TafReportExcelService
 
             for ($slot = 0; $slot < 25; $slot++) {
                 $row = $coords['first'] + $slot;
-                $slotMinutes = ($startHour * 60) + ($slot * 30);
-                $hour = intdiv($slotMinutes, 60);
-                $minute = $slotMinutes % 60;
-
-                $targetTime = Carbon::createFromDate($year, $month, $day, 'UTC')->setTime($hour, $minute, 0);
+                $targetTime = $validStart->copy()->addMinutes(30 * $slot);
 
                 $sheet->setCellValue("A{$row}", $slot + 1);
                 $sheet->setCellValue("B{$row}", $slot === 0 ? $day : null);
@@ -199,28 +195,26 @@ class TafReportExcelService
 
     protected function chooseTafForValidStart(array $tafList, Carbon $validStart): ?object
     {
-        $targetIssue = $validStart->copy()->subHour();
-        $matches = [];
+        $candidates = [];
 
         foreach ($tafList as $taf) {
-            $issued = isset($taf->issued) ? Carbon::parse($taf->issued) : Carbon::parse($taf->validStart ?? $taf->valid_start)->subHour();
-            if ($issued->equalTo($targetIssue) || abs($issued->timestamp - $targetIssue->timestamp) <= 1800) {
-                $matches[] = $taf;
+            $sRaw = $taf->validStart ?? $taf->valid_start ?? null;
+            $eRaw = $taf->validEnd ?? $taf->valid_end ?? null;
+
+            if ($sRaw && $eRaw) {
+                $s = Carbon::parse($sRaw);
+                $e = Carbon::parse($eRaw);
+                if ($s->lessThanOrEqualTo($validStart) && $validStart->lessThan($e)) {
+                    $candidates[] = $taf;
+                }
             }
         }
 
-        if (empty($matches)) {
-            foreach ($tafList as $taf) {
-                $s = Carbon::parse($taf->validStart ?? $taf->valid_start);
-                $e = Carbon::parse($taf->validEnd ?? $taf->valid_end);
-                if ($s->lessThanOrEqualTo($validStart) && $validStart->lessThan($e)) {
-                    return $taf;
-                }
-            }
+        if (empty($candidates)) {
             return null;
         }
 
-        usort($matches, function ($a, $b) use ($validStart) {
+        usort($candidates, function ($a, $b) use ($validStart) {
             $aCor = ($a->isCorrection ?? $a->is_correction ?? false) ? 1 : 0;
             $bCor = ($b->isCorrection ?? $b->is_correction ?? false) ? 1 : 0;
             if ($aCor !== $bCor) return $bCor <=> $aCor;
@@ -230,14 +224,14 @@ class TafReportExcelService
             return abs($aStart->timestamp - $validStart->timestamp) <=> abs($bStart->timestamp - $validStart->timestamp);
         });
 
-        return $matches[0];
+        return $candidates[0];
     }
 
     protected function findObservation(array $obsList, Carbon $targetTime): ?object
     {
         foreach ($obsList as $obs) {
             $obsAt = Carbon::parse($obs->at);
-            if (abs($obsAt->timestamp - $targetTime->timestamp) <= 600) {
+            if (abs($obsAt->timestamp - $targetTime->timestamp) <= 900) {
                 return $obs;
             }
         }

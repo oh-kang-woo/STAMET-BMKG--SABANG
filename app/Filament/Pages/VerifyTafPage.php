@@ -172,14 +172,16 @@ class VerifyTafPage extends Page implements HasActions
                     ->default(now()->format('Y-m')),
             ])
             ->action(function (array $data, TafReportExcelService $excelService) {
-                set_time_limit(180);
+                set_time_limit(300);
 
-                $date = Carbon::parse($data['month'] . '-01');
+                // Parsing aman tanggal awal bulan
+                $date = Carbon::parse($data['month'])->startOfMonth();
 
                 try {
                     $api = app(BmkgAviationApiService::class);
-                    $start = $date->copy()->startOfMonth();
-                    $end = $date->copy()->endOfMonth();
+                    // Rentang penarikan data diperluas (+/- 1 hari) untuk antisipasi TAF/METAR batas bulan
+                    $start = $date->copy()->subDays(1)->startOfDay();
+                    $end = $date->copy()->endOfMonth()->addDays(1)->endOfDay();
 
                     $rawData = $api->collectData($this->icao, $start, $end);
                     $tafs = $rawData['tafs'];
