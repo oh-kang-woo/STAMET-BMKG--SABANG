@@ -9,7 +9,7 @@ use Carbon\Carbon;
 use Filament\Actions\Action;
 use Filament\Actions\Concerns\InteractsWithActions;
 use Filament\Actions\Contracts\HasActions;
-use Filament\Forms\Components\DatePicker;
+use Filament\Forms\Components\Select;
 use Filament\Notifications\Notification;
 use Filament\Pages\Page;
 use Illuminate\Support\Facades\Cache;
@@ -163,25 +163,47 @@ class VerifyTafPage extends Page implements HasActions
             ->modalDescription('Pilih bulan dan tahun laporan yang ingin Anda unduh ke dalam format Excel.')
             ->modalSubmitActionLabel('Unduh Laporan')
             ->form([
-                DatePicker::make('month')
+                Select::make('month')
                     ->label('Bulan Laporan')
-                    ->format('Y-m')
-                    ->displayFormat('F Y')
-                    ->native(false)
-                    ->required()
-                    ->default(now()->format('Y-m')),
+                    ->options([
+                        '01' => 'Januari',
+                        '02' => 'Februari',
+                        '03' => 'Maret',
+                        '04' => 'April',
+                        '05' => 'Mei',
+                        '06' => 'Juni',
+                        '07' => 'Juli',
+                        '08' => 'Agustus',
+                        '09' => 'September',
+                        '10' => 'Oktober',
+                        '11' => 'November',
+                        '12' => 'Desember',
+                    ])
+                    ->default(now()->format('m'))
+                    ->required(),
+
+                Select::make('year')
+                    ->label('Tahun Laporan')
+                    ->options(function () {
+                        $currentYear = (int) now()->format('Y');
+                        $years = [];
+                        for ($y = $currentYear; $y >= $currentYear - 5; $y--) {
+                            $years[$y] = (string) $y;
+                        }
+                        return $years;
+                    })
+                    ->default(now()->format('Y'))
+                    ->required(),
             ])
             ->action(function (array $data, TafReportExcelService $excelService) {
                 set_time_limit(300);
 
-                // Parsing aman tanggal awal bulan
-                $date = Carbon::parse($data['month'])->startOfMonth();
+                $date = Carbon::createFromDate((int)$data['year'], (int)$data['month'], 1)->startOfDay();
 
                 try {
                     $api = app(BmkgAviationApiService::class);
-                    // Rentang penarikan data diperluas (+/- 1 hari) untuk antisipasi TAF/METAR batas bulan
-                    $start = $date->copy()->subDays(1)->startOfDay();
-                    $end = $date->copy()->endOfMonth()->addDays(1)->endOfDay();
+                    $start = $date->copy()->startOfMonth();
+                    $end = $date->copy()->endOfMonth();
 
                     $rawData = $api->collectData($this->icao, $start, $end);
                     $tafs = $rawData['tafs'];

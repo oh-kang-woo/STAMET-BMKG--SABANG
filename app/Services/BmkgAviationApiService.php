@@ -15,24 +15,45 @@ class BmkgAviationApiService
     {
         $anchor = $start->copy()->addDays(15);
 
-        // 1. Scraping TAF
-        $rawTafHtml = $this->fetchFromBmkg($this->tafUrl, $icao, $start, $end);
-        $tafMatches = $this->extractTafMessages($rawTafHtml, $icao);
+        $allRawTaf = [];
+        $allRawMetar = [];
+
+        // Pecah request per 5 hari agar server BMKG tidak mengembalikan data fallback (hari ini)
+        $currentStart = $start->copy()->startOfDay();
+        $finalEnd = $end->copy()->endOfDay();
+
+        while ($currentStart->lessThanOrEqualTo($finalEnd)) {
+            $currentEnd = $currentStart->copy()->addDays(4)->endOfDay();
+            if ($currentEnd->greaterThan($finalEnd)) {
+                $currentEnd = $finalEnd->copy();
+            }
+
+            // Scraping TAF per chunk
+            $rawTafHtml = $this->fetchFromBmkg($this->tafUrl, $icao, $currentStart, $currentEnd);
+            $tafMatches = $this->extractTafMessages($rawTafHtml, $icao);
+            $allRawTaf = array_merge($allRawTaf, $tafMatches);
+
+            // Scraping METAR/SPECI per chunk
+            $rawMetarHtml = $this->fetchFromBmkg($this->metarUrl, $icao, $currentStart, $currentEnd);
+            $metarMatches = $this->extractMetarMessages($rawMetarHtml, $icao);
+            $allRawMetar = array_merge($allRawMetar, $metarMatches);
+
+            $currentStart = $currentEnd->copy()->addSecond();
+        }
+
+        $allRawTaf = array_unique($allRawTaf);
+        $allRawMetar = array_unique($allRawMetar);
 
         $tafs = [];
-        foreach ($tafMatches as $raw) {
+        foreach ($allRawTaf as $raw) {
             $parsed = TafParserService::parseTaf($raw, $anchor);
             if ($parsed) {
                 $tafs[] = $parsed;
             }
         }
 
-        // 2. Scraping METAR / SPECI
-        $rawMetarHtml = $this->fetchFromBmkg($this->metarUrl, $icao, $start, $end);
-        $metarMatches = $this->extractMetarMessages($rawMetarHtml, $icao);
-
         $observations = [];
-        foreach ($metarMatches as $raw) {
+        foreach ($allRawMetar as $raw) {
             $parsed = TafParserService::parseObservation($raw, $anchor);
             if ($parsed) {
                 $observations[] = $parsed;
@@ -49,7 +70,6 @@ class BmkgAviationApiService
 
     protected function fetchFromBmkg(string $url, string $icao, Carbon $start, Carbon $end): string
     {
-        // Step 1: GET halaman awal untuk mengambil CSRF Token (_token) & Cookie Sesi
         $get = Http::withoutVerifying()
             ->timeout(30)
             ->withHeaders([
@@ -58,11 +78,9 @@ class BmkgAviationApiService
             ])
             ->get($url);
 
-        // Extract CSRF token dari input hidden
         preg_match('/name="_token"\s+value="([^"]+)"/i', $get->body(), $matches);
         $token = $matches[1] ?? '';
 
-        // Re-format cookies menjadi key => value biasa agar tidak memicu warning di Guzzle
         $cookies = [];
         foreach ($get->cookies() as $cookie) {
             $cookies[$cookie->getName()] = $cookie->getValue();
@@ -70,7 +88,6 @@ class BmkgAviationApiService
 
         $host = parse_url($url, PHP_URL_HOST);
 
-        // Step 2: POST dengan payload standar form BMKG
         $post = Http::withoutVerifying()
             ->timeout(60)
             ->withCookies($cookies, $host)
