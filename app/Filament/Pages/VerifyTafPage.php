@@ -6,25 +6,29 @@ use App\Services\BmkgAviationApiService;
 use App\Services\TafReportExcelService;
 use App\Services\TafVerifierService;
 use Carbon\Carbon;
+use Filament\Actions\Action;
+use Filament\Actions\Concerns\InteractsWithActions;
+use Filament\Actions\Contracts\HasActions;
+use Filament\Forms\Components\DatePicker;
 use Filament\Notifications\Notification;
 use Filament\Pages\Page;
 use Illuminate\Support\Facades\Cache;
 
-class VerifyTafPage extends Page
+class VerifyTafPage extends Page implements HasActions
 {
+    use InteractsWithActions;
+
     protected static ?string $navigationIcon = 'heroicon-o-check-badge';
     protected static string $view = 'filament.pages.verify-taf-page';
     protected static ?string $title = 'Verifikasi TAF Realtime';
     protected static ?string $slug = 'verify-taf-page';
 
     public string $selectedDate;
-    public string $selectedMonth; // Properti baru untuk filter bulan/tahun export
     public string $icao = 'WITN';
 
     public function mount(): void
     {
         $this->selectedDate = now()->toDateString();
-        $this->selectedMonth = now()->format('Y-m'); // Default ke bulan dan tahun berjalan (misal: 2026-10)
     }
 
     public function getRealtimeDataProperty(): array
@@ -148,36 +152,54 @@ class VerifyTafPage extends Page
         Cache::forget($cacheKey);
     }
 
-    public function exportExcel(TafReportExcelService $excelService)
+    public function exportExcelAction(): Action
     {
-        set_time_limit(180);
+        return Action::make('exportExcel')
+            ->label('Download Excel')
+            ->icon('heroicon-m-arrow-down-tray')
+            ->color('success')
+            ->size('sm')
+            ->modalHeading('Unduh Laporan Verifikasi TAF')
+            ->modalDescription('Pilih bulan dan tahun laporan yang ingin Anda unduh ke dalam format Excel.')
+            ->modalSubmitActionLabel('Unduh Laporan')
+            ->form([
+                DatePicker::make('month')
+                    ->label('Bulan Laporan')
+                    ->format('Y-m')
+                    ->displayFormat('F Y')
+                    ->native(false)
+                    ->required()
+                    ->default(now()->format('Y-m')),
+            ])
+            ->action(function (array $data, TafReportExcelService $excelService) {
+                set_time_limit(180);
 
-        // Mengambil bulan dan tahun dari $selectedMonth (contoh: '2026-08' -> 1 Agustus 2026)
-        $date = Carbon::parse($this->selectedMonth . '-01');
+                $date = Carbon::parse($data['month'] . '-01');
 
-        try {
-            $api = app(BmkgAviationApiService::class);
-            $start = $date->copy()->startOfMonth();
-            $end = $date->copy()->endOfMonth();
+                try {
+                    $api = app(BmkgAviationApiService::class);
+                    $start = $date->copy()->startOfMonth();
+                    $end = $date->copy()->endOfMonth();
 
-            $rawData = $api->collectData($this->icao, $start, $end);
-            $tafs = $rawData['tafs'];
-            $observations = $rawData['observations'];
+                    $rawData = $api->collectData($this->icao, $start, $end);
+                    $tafs = $rawData['tafs'];
+                    $observations = $rawData['observations'];
 
-            $fileName = $excelService->generate($date, $tafs, $observations);
-            $filePath = storage_path('app/public/' . $fileName);
+                    $fileName = $excelService->generate($date, $tafs, $observations);
+                    $filePath = storage_path('app/public/' . $fileName);
 
-            if (!file_exists($filePath)) {
-                throw new \Exception("File hasil export Excel tidak ditemukan.");
-            }
+                    if (!file_exists($filePath)) {
+                        throw new \Exception("File hasil export Excel tidak ditemukan.");
+                    }
 
-            return response()->download($filePath, $fileName)->deleteFileAfterSend(true);
-        } catch (\Exception $e) {
-            Notification::make()
-                ->title('Gagal Mengunduh Laporan')
-                ->body($e->getMessage())
-                ->danger()
-                ->send();
-        }
+                    return response()->download($filePath, $fileName)->deleteFileAfterSend(true);
+                } catch (\Exception $e) {
+                    Notification::make()
+                        ->title('Gagal Mengunduh Laporan')
+                        ->body($e->getMessage())
+                        ->danger()
+                        ->send();
+                }
+            });
     }
 }
