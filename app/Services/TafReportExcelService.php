@@ -271,7 +271,7 @@ class TafReportExcelService
             $sheet->setCellValue("D{$row}", $taf ? 'TAF TIDAK SESUAI' : 'TAF TIDAK ADA');
             $sheet->setCellValue("E{$row}", $taf ? 'TIDAK DAPAT DIVERIFIKASI' : null);
             for ($c = 6; $c <= 12; $c++) {
-                $sheet->setCellValueByColumnAndRow($c, $row, null);
+                $sheet->setCellValue([$c, $row], null);
             }
         }
 
@@ -306,7 +306,7 @@ class TafReportExcelService
             }
         } else {
             for ($c = 13; $c <= 27; $c++) {
-                $sheet->setCellValueByColumnAndRow($c, $row, null);
+                $sheet->setCellValue([$c, $row], null);
             }
         }
 
