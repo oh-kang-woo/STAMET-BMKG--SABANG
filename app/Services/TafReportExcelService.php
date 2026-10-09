@@ -52,7 +52,6 @@ class TafReportExcelService
         $spreadsheet = IOFactory::load($templatePath);
         $daysInMonth = $start->daysInMonth;
 
-        // Hapus sheet tanggal yang melebihi jumlah hari dalam bulan ini
         for ($day = $daysInMonth + 1; $day <= 31; $day++) {
             $sheet = $spreadsheet->getSheetByName((string)$day);
             if ($sheet !== null) {
@@ -150,7 +149,8 @@ class TafReportExcelService
             $sheet->setCellValue("B{$coords['header']}", $day);
             $sheet->setCellValue("D{$coords['header']}", "Prakiraan TAF " . sprintf('%02d', $startHour) . " UTC");
             if ($activeTaf) {
-                $tafRawDisplay = !empty($activeTaf->isInvalid)
+                $isInvalid = $activeTaf->isInvalid ?? $activeTaf->is_invalid ?? false;
+                $tafRawDisplay = $isInvalid
                     ? $activeTaf->raw . "\nTAF TIDAK SESUAI - TIDAK DAPAT DIVERIFIKASI"
                     : $activeTaf->raw;
                 $sheet->setCellValue("E{$coords['header']}", $tafRawDisplay);
@@ -159,7 +159,7 @@ class TafReportExcelService
             }
 
             $actualRowsData = [];
-            $tempoGroups = $activeTaf ? array_filter($activeTaf->groups ?? [], fn($g) => in_array($g->kind, ['TEMPO', 'PROB30 TEMPO', 'PROB40 TEMPO', 'PROB30', 'PROB40'])) : [];
+            $tempoGroups = $activeTaf ? array_filter($activeTaf->groups ?? [], fn($g) => in_array($g->kind ?? $g['kind'] ?? '', ['TEMPO', 'PROB30 TEMPO', 'PROB40 TEMPO', 'PROB30', 'PROB40'])) : [];
 
             for ($slot = 0; $slot < 25; $slot++) {
                 $row = $coords['first'] + $slot;
@@ -221,8 +221,8 @@ class TafReportExcelService
         }
 
         usort($matches, function ($a, $b) use ($validStart) {
-            $aCor = !empty($a->isCorrection || $a->is_correction) ? 1 : 0;
-            $bCor = !empty($b->isCorrection || $b->is_correction) ? 1 : 0;
+            $aCor = ($a->isCorrection ?? $a->is_correction ?? false) ? 1 : 0;
+            $bCor = ($b->isCorrection ?? $b->is_correction ?? false) ? 1 : 0;
             if ($aCor !== $bCor) return $bCor <=> $aCor;
 
             $aStart = Carbon::parse($a->validStart ?? $a->valid_start);
@@ -251,7 +251,7 @@ class TafReportExcelService
         ?object $obs,
         Carbon $targetTime
     ): ?array {
-        $isTafValid = $taf && empty($taf->isInvalid);
+        $isTafValid = $taf && !($taf->isInvalid ?? $taf->is_invalid ?? false);
 
         if ($isTafValid) {
             $match = $this->verifier->scoreForTime($taf, $obs ?? ['at' => $targetTime, 'raw' => '', 'condition' => []]);
@@ -406,7 +406,8 @@ class TafReportExcelService
         $finalResults = [];
 
         foreach ($scoreCols as $key => $col) {
-            if ($obsCount === 0 || !$taf || !empty($taf->isInvalid)) {
+            $isInvalid = $taf->isInvalid ?? $taf->is_invalid ?? false;
+            if ($obsCount === 0 || !$taf || $isInvalid) {
                 $res = 0.0;
             } else {
                 $nonTempoCorrect = $sumsUmum[$key] + $sumsBecmg[$key];
