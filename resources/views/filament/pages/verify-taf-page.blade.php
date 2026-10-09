@@ -28,6 +28,14 @@
                                class="bg-transparent border-0 p-0 text-xs font-bold text-primary-600 dark:text-primary-400 focus:ring-0 cursor-pointer [color-scheme:dark]">
                     </div>
 
+                    {{-- Filter Pilihan Bulan Export --}}
+                    <div class="flex items-center gap-2 bg-gray-100 dark:bg-gray-800/80 px-3.5 py-1.5 rounded-lg border border-gray-200 dark:border-white/10 text-xs">
+                        <span class="text-gray-500 dark:text-gray-400 font-medium">Bulan Export:</span>
+                        <input type="month" 
+                               wire:model.live="selectedMonth" 
+                               class="bg-transparent border-0 p-0 text-xs font-bold text-primary-600 dark:text-primary-400 focus:ring-0 cursor-pointer [color-scheme:dark]">
+                    </div>
+
                     <div class="flex items-center gap-2 bg-gray-100 dark:bg-gray-800/80 px-3.5 py-1.5 rounded-lg border border-gray-200 dark:border-white/10 text-xs">
                         <span class="text-gray-500 dark:text-gray-400 font-medium">Stasiun:</span>
                         <span class="font-mono font-bold text-emerald-600 dark:text-emerald-400">WITN</span>

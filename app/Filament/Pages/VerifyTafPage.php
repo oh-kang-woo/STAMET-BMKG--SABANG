@@ -18,11 +18,13 @@ class VerifyTafPage extends Page
     protected static ?string $slug = 'verify-taf-page';
 
     public string $selectedDate;
+    public string $selectedMonth; // Properti baru untuk filter bulan/tahun export
     public string $icao = 'WITN';
 
     public function mount(): void
     {
         $this->selectedDate = now()->toDateString();
+        $this->selectedMonth = now()->format('Y-m'); // Default ke bulan dan tahun berjalan (misal: 2026-10)
     }
 
     public function getRealtimeDataProperty(): array
@@ -89,7 +91,6 @@ class VerifyTafPage extends Page
                     $slotPassed = false;
 
                     if ($activeTaf && $activeObs) {
-                        // Menggunakan scoreForTime untuk memperhitungkan BECMG & TEMPO secara presisi
                         $match = $verifier->scoreForTime($activeTaf, $activeObs);
                         $expectedGroup = $match['group'];
 
@@ -151,7 +152,8 @@ class VerifyTafPage extends Page
     {
         set_time_limit(180);
 
-        $date = Carbon::parse($this->selectedDate);
+        // Mengambil bulan dan tahun dari $selectedMonth (contoh: '2026-08' -> 1 Agustus 2026)
+        $date = Carbon::parse($this->selectedMonth . '-01');
 
         try {
             $api = app(BmkgAviationApiService::class);
@@ -162,8 +164,6 @@ class VerifyTafPage extends Page
             $tafs = $rawData['tafs'];
             $observations = $rawData['observations'];
 
-            // Mendelegasikan pembuatan Laporan Excel ke TafReportExcelService
-            // agar seluruh kolom D-AA, sheet harian, dan sheet rekap 1 bulan terisi sempurna
             $fileName = $excelService->generate($date, $tafs, $observations);
             $filePath = storage_path('app/public/' . $fileName);
 
