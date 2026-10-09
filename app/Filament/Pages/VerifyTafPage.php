@@ -3,12 +3,12 @@
 namespace App\Filament\Pages;
 
 use App\Services\BmkgAviationApiService;
+use App\Services\TafReportExcelService;
 use App\Services\TafVerifierService;
 use Carbon\Carbon;
 use Filament\Notifications\Notification;
 use Filament\Pages\Page;
 use Illuminate\Support\Facades\Cache;
-use PhpOffice\PhpSpreadsheet\IOFactory;
 
 class VerifyTafPage extends Page
 {
@@ -28,7 +28,7 @@ class VerifyTafPage extends Page
     public function getRealtimeDataProperty(): array
     {
         $date = Carbon::parse($this->selectedDate);
-        $cacheKey = "taf_realtime_v2_{$this->icao}_{$date->format('Y-m-d')}";
+        $cacheKey = "taf_realtime_v3_{$this->icao}_{$date->format('Y-m-d')}";
 
         return Cache::remember($cacheKey, now()->addMinutes(5), function () use ($date) {
             $api = app(BmkgAviationApiService::class);
@@ -61,11 +61,15 @@ class VerifyTafPage extends Page
             for ($hour = 0; $hour <= $maxHour; $hour++) {
                 foreach ([0, 30] as $minute) {
                     $targetTime = $date->copy()->setTime($hour, $minute);
-                    if ($targetTime > $now && $date->isToday()) break;
+                    if ($targetTime > $now && $date->isToday()) {
+                        break;
+                    }
 
                     $activeTaf = null;
                     foreach ($tafs as $t) {
-                        if ($t->validStart <= $targetTime && $targetTime <= $t->validEnd) {
+                        $vStart = Carbon::parse($t->validStart ?? $t->valid_start);
+                        $vEnd = Carbon::parse($t->validEnd ?? $t->valid_end);
+                        if ($vStart <= $targetTime && $targetTime <= $vEnd) {
                             $activeTaf = $t;
                             break;
                         }
@@ -73,7 +77,8 @@ class VerifyTafPage extends Page
 
                     $activeObs = null;
                     foreach ($observations as $obs) {
-                        if (abs($obs->at->getTimestamp() - $targetTime->getTimestamp()) <= 900) {
+                        $obsAt = Carbon::parse($obs->at);
+                        if (abs($obsAt->getTimestamp() - $targetTime->getTimestamp()) <= 900) {
                             $activeObs = $obs;
                             break;
                         }
@@ -84,13 +89,12 @@ class VerifyTafPage extends Page
                     $slotPassed = false;
 
                     if ($activeTaf && $activeObs) {
-                        $groups = $verifier->matchingGroups($activeTaf, $targetTime);
-                        $expectedGroup = end($groups);
-                        
-                        $groupKind = is_object($expectedGroup) ? $expectedGroup->kind : $expectedGroup['kind'];
-                        $groupCond = is_object($expectedGroup) ? $expectedGroup->condition : $expectedGroup['condition'];
+                        // Menggunakan scoreForTime untuk memperhitungkan BECMG & TEMPO secara presisi
+                        $match = $verifier->scoreForTime($activeTaf, $activeObs);
+                        $expectedGroup = $match['group'];
 
-                        $scores = $verifier->calculateScore($groupCond, $activeObs->condition, $activeObs->raw);
+                        $groupKind = is_object($expectedGroup) ? $expectedGroup->kind : ($expectedGroup['kind'] ?? '-');
+                        $scores = $match['scores'];
 
                         $totalEvaluated++;
                         $sumScore = array_sum($scores);
@@ -102,8 +106,12 @@ class VerifyTafPage extends Page
                         }
 
                         foreach ($scores as $key => $val) {
-                            $paramStats[$key]['total']++;
-                            if ($val === 1) $paramStats[$key]['pass']++;
+                            if (isset($paramStats[$key])) {
+                                $paramStats[$key]['total']++;
+                                if ($val === 1) {
+                                    $paramStats[$key]['pass']++;
+                                }
+                            }
                         }
                     }
 
@@ -113,7 +121,7 @@ class VerifyTafPage extends Page
                         'metar_raw' => $activeObs?->raw ?? 'Data METAR Belum Tersedia',
                         'group' => $groupKind,
                         'scores' => $scores,
-                        'passed' => $slotPassed
+                        'passed' => $slotPassed,
                     ];
                 }
             }
@@ -128,92 +136,42 @@ class VerifyTafPage extends Page
                     'failed' => $failedSlots,
                     'accuracy' => $overallAccuracy,
                     'paramStats' => $paramStats,
-                ]
+                ],
             ];
         });
     }
 
     public function refreshData(): void
     {
-        $cacheKey = "taf_realtime_v2_{$this->icao}_" . Carbon::parse($this->selectedDate)->format('Y-m-d');
+        $cacheKey = "taf_realtime_v3_{$this->icao}_" . Carbon::parse($this->selectedDate)->format('Y-m-d');
         Cache::forget($cacheKey);
     }
 
-    public function exportExcel()
+    public function exportExcel(TafReportExcelService $excelService)
     {
-        set_time_limit(120);
-
-        $possiblePaths = [
-            storage_path('app/templates/TemplateVerifTAF.xlsx'),
-            storage_path('app/templates/Verifikasi_Taf.xlsx'),
-            storage_path('app/templates/Verifikasi_TAF.xlsx'),
-            storage_path('app/templates/TemplateVerifTAF (1).xlsx'),
-        ];
-
-        $templatePath = null;
-        foreach ($possiblePaths as $path) {
-            if (file_exists($path)) {
-                $templatePath = $path;
-                break;
-            }
-        }
-
-        if (!$templatePath) {
-            Notification::make()
-                ->title('File Template Tidak Ditemukan')
-                ->body('Pastikan file template Excel ada di folder storage/app/templates/')
-                ->danger()
-                ->send();
-            return;
-        }
+        set_time_limit(180);
 
         $date = Carbon::parse($this->selectedDate);
-        $dayNumber = (string) $date->day;
-        $monthYear = $date->translatedFormat('F Y');
 
         try {
-            $spreadsheet = IOFactory::load($templatePath);
+            $api = app(BmkgAviationApiService::class);
+            $start = $date->copy()->startOfMonth();
+            $end = $date->copy()->endOfMonth();
 
-            $rekapSheet = $spreadsheet->getSheetByName('rekap 1 bulan');
-            if ($rekapSheet) {
-                $rekapSheet->setCellValue('A2', "VERIFIKASI TAF BULAN " . strtoupper($monthYear));
+            $rawData = $api->collectData($this->icao, $start, $end);
+            $tafs = $rawData['tafs'];
+            $observations = $rawData['observations'];
+
+            // Mendelegasikan pembuatan Laporan Excel ke TafReportExcelService
+            // agar seluruh kolom D-AA, sheet harian, dan sheet rekap 1 bulan terisi sempurna
+            $fileName = $excelService->generate($date, $tafs, $observations);
+            $filePath = storage_path('app/public/' . $fileName);
+
+            if (!file_exists($filePath)) {
+                throw new \Exception("File hasil export Excel tidak ditemukan.");
             }
 
-            $sheet = $spreadsheet->getSheetByName($dayNumber);
-            if ($sheet) {
-                $sheet->setCellValue('B3', "BULAN : " . strtoupper($date->translatedFormat('F')));
-                $sheet->setCellValue('E3', "TAHUN : " . $date->year);
-
-                $startRow = 7;
-                $data = array_reverse($this->realtimeData['rows']);
-
-                foreach ($data as $index => $row) {
-                    $currentRow = $startRow + $index;
-                    
-                    $sheet->setCellValue("M{$currentRow}", $row['metar_raw']);
-                    $sheet->setCellValue("D{$currentRow}", $row['group']);
-                    
-                    if ($row['scores']) {
-                        $sheet->setCellValue("O{$currentRow}", $row['scores']['wind_dir']);
-                        $sheet->setCellValue("Q{$currentRow}", $row['scores']['wind_speed']);
-                        $sheet->setCellValue("S{$currentRow}", $row['scores']['gust']);
-                        $sheet->setCellValue("U{$currentRow}", $row['scores']['visibility']);
-                        $sheet->setCellValue("W{$currentRow}", $row['scores']['precip']);
-                        $sheet->setCellValue("Y{$currentRow}", $row['scores']['cloud']);
-                        $sheet->setCellValue("AA{$currentRow}", $row['scores']['ceiling']);
-                    }
-                }
-            }
-
-            $filename = "Verifikasi_TAF_{$this->icao}_" . $date->format('Y-m-d') . ".xlsx";
-
-            return response()->streamDownload(function () use ($spreadsheet) {
-                $writer = IOFactory::createWriter($spreadsheet, 'Xlsx');
-                $writer->setPreCalculateFormulas(false);
-                $writer->save('php://output');
-            }, $filename, [
-                'Content-Type' => 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-            ]);
+            return response()->download($filePath, $fileName)->deleteFileAfterSend(true);
         } catch (\Exception $e) {
             Notification::make()
                 ->title('Gagal Mengunduh Laporan')

@@ -38,7 +38,7 @@ class TafCondition
         if (is_array($data)) {
             $c->windDir = $data['wind_dir'] ?? $data['windDir'] ?? null;
             $c->windSpeed = $data['wind_speed'] ?? $data['windSpeed'] ?? null;
-            $c->gust = $data['gust'] ?? false;
+            $c->gust = (bool)($data['gust'] ?? false);
             $c->visibility = $data['visibility'] ?? null;
             $c->precipCode = $data['precip_code'] ?? $data['precipCode'] ?? 'NONE';
             $c->cloud = $data['cloud'] ?? null;
@@ -46,7 +46,7 @@ class TafCondition
         } elseif (is_object($data)) {
             $c->windDir = $data->wind_dir ?? $data->windDir ?? null;
             $c->windSpeed = $data->wind_speed ?? $data->windSpeed ?? null;
-            $c->gust = $data->gust ?? false;
+            $c->gust = (bool)($data->gust ?? $data->gust ?? false);
             $c->visibility = $data->visibility ?? null;
             $c->precipCode = $data->precip_code ?? $data->precipCode ?? 'NONE';
             $c->cloud = $data->cloud ?? null;
@@ -101,7 +101,7 @@ class TafVerifierService
             }
         }
 
-        if (preg_match_all('/(?<![A-Z0-9])([+-]?(?:SH)?(?:RA|DZ|SN|SG|PL|GR|GS))(?![A-Z0-9])/i', $text, $wxMatches)) {
+        if (preg_match_all('/(?<![A-Z0-9])([+-]?(?:SH|TS)?(?:RA|DZ|SN|SG|PL|GR|GS))(?![A-Z0-9])/i', $text, $wxMatches)) {
             $rainTokens = array_values(array_filter($wxMatches[1], fn($w) => str_ends_with(strtoupper($w), 'RA')));
             if (!empty($rainTokens)) {
                 $c->precipCode = strtoupper($rainTokens[0]);
@@ -134,7 +134,7 @@ class TafVerifierService
 
         $windDirScore = $this->windDirOk($exp, $act, $rawObs);
         $windSpeedScore = ($exp->windSpeed !== null && $act->windSpeed !== null && abs($exp->windSpeed - $act->windSpeed) <= 10) ? 1 : 0;
-        $gustScore = ($exp->gust === $act->gust) ? 1 : 0;
+        $gustScore = (($exp->gust ?? false) === ($act->gust ?? false)) ? 1 : 0;
         $visScore = ($exp->visibility !== null && $act->visibility !== null && $this->visibilityClass($exp->visibility) === $this->visibilityClass($act->visibility)) ? 1 : 0;
         $precipScore = $this->precipOk($exp, $act);
         $cloudScore = $this->cloudOk($exp, $act);
@@ -170,7 +170,7 @@ class TafVerifierService
         }
 
         $windSpeedScore = $this->betweenNumber($act->windSpeed, $prev->windSpeed, $tgt->windSpeed) ? 1 : 0;
-        $gustScore = ($act->gust === $prev->gust || $act->gust === $tgt->gust) ? 1 : 0;
+        $gustScore = (($act->gust ?? false) === ($prev->gust ?? false) || ($act->gust ?? false) === ($tgt->gust ?? false)) ? 1 : 0;
 
         $visScore = ($this->betweenNumber($act->visibility, $prev->visibility, $tgt->visibility) ||
             ($act->visibility !== null && in_array($this->visibilityClass($act->visibility), [
@@ -232,9 +232,9 @@ class TafVerifierService
 
     public function matchingGroups(mixed $taf, Carbon $at): array
     {
-        $validStart = Carbon::parse($taf->validStart ?? $taf['validStart'] ?? $taf->valid_start);
-        $validEnd = Carbon::parse($taf->validEnd ?? $taf['validEnd'] ?? $taf->valid_end);
-        $groups = $taf->groups ?? $taf['groups'] ?? [];
+        $validStart = Carbon::parse(is_object($taf) ? ($taf->validStart ?? $taf->valid_start) : ($taf['validStart'] ?? $taf['valid_start']));
+        $validEnd = Carbon::parse(is_object($taf) ? ($taf->validEnd ?? $taf->valid_end) : ($taf['validEnd'] ?? $taf['valid_end']));
+        $groups = is_object($taf) ? ($taf->groups ?? []) : ($taf['groups'] ?? []);
 
         if ($at < $validStart || $at > $validEnd) {
             return [$groups[0] ?? $this->makeDefaultGroup($validStart, $validEnd)];
@@ -303,12 +303,15 @@ class TafVerifierService
         if ($expected->windDir === null || $actual->windDir === null) return 0;
         if ($expected->windDir === 999 && $actual->windDir === 999) return 1;
 
+        $actSpeed = $actual->windSpeed ?? 999;
+        $expSpeed = $expected->windSpeed ?? 999;
+
         if ($expected->windDir === 999) {
-            return ($actual->windSpeed < 10 || str_contains($raw, 'TS') || str_contains($raw, 'CB')) ? 1 : 0;
+            return ($actSpeed < 10 || str_contains($raw, 'TS') || str_contains($raw, 'CB')) ? 1 : 0;
         }
 
         if ($actual->windDir === 999) {
-            return ($expected->windSpeed < 10 && $actual->windSpeed < 10) ? 1 : 0;
+            return ($expSpeed < 10 && $actSpeed < 10) ? 1 : 0;
         }
 
         $delta = abs($expected->windDir - $actual->windDir);
@@ -316,7 +319,7 @@ class TafVerifierService
 
         if ($delta <= 60) return 1;
 
-        return ($actual->windSpeed < 10) ? 1 : 0;
+        return ($actSpeed < 10) ? 1 : 0;
     }
 
     private function cloudOk(TafCondition $expected, TafCondition $actual): int
