@@ -15,17 +15,40 @@ class TafReportExcelService
         $this->verifier = $verifier;
     }
 
+    protected function getTemplatePath(): string
+    {
+        $possibleNames = [
+            'TemplateVerifTAF.xlsx',
+            'Verifikasi_Taf.xlsx',
+            'Verifikasi_TAF.xlsx',
+            'Template Verif TAF.xlsx',
+            'TemplateVerifTAF (1).xlsx',
+        ];
+
+        $directories = [
+            storage_path('templates'),
+            storage_path('app/templates'),
+            storage_path('app/public'),
+            storage_path('app'),
+            storage_path(),
+            base_path(),
+        ];
+
+        foreach ($directories as $dir) {
+            foreach ($possibleNames as $name) {
+                $fullPath = $dir . DIRECTORY_SEPARATOR . $name;
+                if (file_exists($fullPath)) {
+                    return $fullPath;
+                }
+            }
+        }
+
+        throw new \Exception("File template Excel tidak ditemukan. Pastikan file 'TemplateVerifTAF.xlsx' berada di folder 'storage/templates/'.");
+    }
+
     public function generate(Carbon $start, array $tafs, array $observations): string
     {
-        $templatePath = storage_path('app/templates/Verifikasi_Taf.xlsx');
-        if (!file_exists($templatePath)) {
-            $templatePath = base_path('Template Verif TAF.xlsx');
-        }
-
-        if (!file_exists($templatePath)) {
-            throw new \Exception("File template 'Verifikasi_Taf.xlsx' atau 'Template Verif TAF.xlsx' tidak ditemukan.");
-        }
-
+        $templatePath = $this->getTemplatePath();
         $spreadsheet = IOFactory::load($templatePath);
         $daysInMonth = $start->daysInMonth;
 
@@ -48,7 +71,6 @@ class TafReportExcelService
         $rekapRow = 7;
         $rekapCols = ['C' => 'wind_dir', 'E' => 'wind_speed', 'G' => 'gust', 'I' => 'visibility', 'K' => 'precip', 'M' => 'cloud', 'O' => 'ceiling'];
 
-        // Isi data harian untuk setiap tanggal dalam bulan
         for ($day = 1; $day <= $daysInMonth; $day++) {
             $sheet = $spreadsheet->getSheetByName((string)$day);
             if ($sheet !== null) {
@@ -69,7 +91,6 @@ class TafReportExcelService
             }
         }
 
-        // Hitung Rata-Rata Bulanan di Header Rekap (Baris 4)
         if ($rekapSheet !== null) {
             foreach ($rekapCols as $col => $scoreKey) {
                 $sum = 0;
@@ -85,7 +106,6 @@ class TafReportExcelService
                 $rekapSheet->setCellValue("{$col}4", $avg);
             }
 
-            // Bersihkan baris sisa pada rekap
             for ($r = $rekapRow; $r <= 131; $r++) {
                 foreach (['A', 'B', 'C', 'E', 'G', 'I', 'K', 'M', 'O'] as $col) {
                     $rekapSheet->setCellValue("{$col}{$r}", null);
@@ -127,7 +147,6 @@ class TafReportExcelService
             $validStart = Carbon::createFromDate($year, $month, $day, 'UTC')->setTime($startHour, 0, 0);
             $activeTaf = $this->chooseTafForValidStart($tafList, $validStart);
 
-            // Tulis Header Blok
             $sheet->setCellValue("B{$coords['header']}", $day);
             $sheet->setCellValue("D{$coords['header']}", "Prakiraan TAF " . sprintf('%02d', $startHour) . " UTC");
             if ($activeTaf) {
@@ -150,7 +169,6 @@ class TafReportExcelService
 
                 $targetTime = Carbon::createFromDate($year, $month, $day, 'UTC')->setTime($hour, $minute, 0);
 
-                // Slot metadata
                 $sheet->setCellValue("A{$row}", $slot + 1);
                 $sheet->setCellValue("B{$row}", $slot === 0 ? $day : null);
                 $sheet->setCellValue("C{$row}", $targetTime->format('H:i'));
@@ -163,7 +181,6 @@ class TafReportExcelService
                 }
             }
 
-            // Hitung & Tulis Ringkasan Blok (Row Summary & Result)
             $res = $this->writeBlockSummary(
                 $sheet,
                 $activeTaf,
@@ -337,14 +354,12 @@ class TafReportExcelService
             }
         }
 
-        // Tulis Row 12 JAM, UMUM, BECMG
         foreach ($scoreCols as $key => $col) {
             $sheet->setCellValue("{$col}{$summaryRow}", $sums12Jam[$key]);
             $sheet->setCellValue("{$col}" . ($summaryRow + 1), $sumsUmum[$key]);
             $sheet->setCellValue("{$col}" . ($summaryRow + 2), $sumsBecmg[$key]);
         }
 
-        // Perhitungan TEMPO Duration & Slots
         $tempoExpectedSlots = 0;
         $tempoCorrectByParam = array_fill_keys($keys, 0);
 
@@ -388,7 +403,6 @@ class TafReportExcelService
             $sheet->setCellValue("{$col}" . ($summaryRow + 3), $tempoCorrectByParam[$key]);
         }
 
-        // Hitung Hasil Akhir % RESULT
         $finalResults = [];
 
         foreach ($scoreCols as $key => $col) {
