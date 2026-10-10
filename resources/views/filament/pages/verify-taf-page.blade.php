@@ -80,7 +80,7 @@
                 <!-- Kanan: Hasil QC -->
                 <div class="flex flex-col h-full">
                     @if(!empty($qcResult))
-                        <div class="mb-4 p-4 rounded-lg text-sm flex items-start gap-3 border {{ $qcResult['is_valid'] ? 'bg-emerald-50 border-emerald-200 text-emerald-800 dark:bg-emerald-500/10 dark:border-emerald-500/30 dark:text-emerald-300' : 'bg-rose-50 border-rose-200 text-rose-800 dark:bg-rose-500/10 dark:border-rose-500/30 dark:text-rose-300' }}">
+                        <div class="mb-4 p-4 rounded-lg text-sm flex items-start gap-3 border {{ $qcResult['is_valid'] ? 'bg-emerald-50 border-emerald-200 text-emerald-800 dark:bg-emerald-900 dark:border-emerald-700 dark:text-emerald-300' : 'bg-rose-50 border-rose-200 text-rose-800 dark:bg-rose-900 dark:border-rose-700 dark:text-rose-300' }}">
                             @if($qcResult['is_valid'])
                                 <div style="width: 24px; height: 24px; flex-shrink: 0;">
                                     <x-heroicon-m-check-circle class="text-emerald-500"/>
@@ -102,25 +102,25 @@
                         
                         <div class="overflow-x-auto border rounded-lg dark:border-gray-700 flex-1">
                             <table class="w-full text-sm text-left">
-                                <thead class="border-b dark:border-gray-700">
+                                <thead class="border-b dark:border-gray-700 bg-gray-50 dark:bg-gray-800">
                                     <tr>
                                         <th class="p-3 border-r dark:border-gray-700 font-bold text-gray-900 dark:text-gray-200">Elemen</th>
                                         <th class="p-3 border-r dark:border-gray-700 font-bold text-gray-900 dark:text-gray-200">Aturan QC</th>
                                         <th class="p-3 font-bold text-gray-900 dark:text-gray-200">Keterangan</th>
                                     </tr>
                                 </thead>
-                                <tbody class="divide-y divide-gray-200 dark:divide-gray-700/50 bg-white dark:bg-transparent">
+                                <tbody class="divide-y divide-gray-200 dark:divide-gray-700 bg-white dark:bg-gray-900">
                                     @foreach($qcResult['results'] as $res)
-                                        <tr class="{{ $res['is_valid'] ? 'text-gray-800 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-white/5 transition-colors' : 'bg-rose-50/50 dark:bg-rose-900/20 text-rose-800 dark:text-rose-300 hover:bg-rose-100/50 dark:hover:bg-rose-900/30 transition-colors' }}">
-                                            <td class="p-3 border-r dark:border-gray-700/50 font-mono font-bold text-primary-600 dark:text-primary-400">{{ $res['element'] }}</td>
-                                            <td class="p-3 border-r dark:border-gray-700/50 font-medium">{{ $res['rule'] }}</td>
+                                        <tr class="{{ $res['is_valid'] ? 'text-gray-800 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors' : 'bg-rose-50 dark:bg-rose-900/40 text-rose-800 dark:text-rose-300 hover:bg-rose-100 dark:hover:bg-rose-900/60 transition-colors' }}">
+                                            <td class="p-3 border-r dark:border-gray-700 font-mono font-bold text-primary-600 dark:text-primary-400">{{ $res['element'] }}</td>
+                                            <td class="p-3 border-r dark:border-gray-700 font-medium">{{ $res['rule'] }}</td>
                                             <td class="p-3 flex items-center gap-2.5 font-medium">
                                                 @if($res['is_valid'])
-                                                    <div class="flex items-center justify-center w-5 h-5 rounded-full bg-emerald-100 dark:bg-emerald-500/20 text-emerald-600 dark:text-emerald-400 flex-shrink-0">
+                                                    <div class="flex items-center justify-center w-5 h-5 rounded-full bg-emerald-100 dark:bg-emerald-900 text-emerald-600 dark:text-emerald-400 flex-shrink-0">
                                                         <x-heroicon-m-check style="width: 12px; height: 12px;"/>
                                                     </div>
                                                 @else
-                                                    <div class="flex items-center justify-center w-5 h-5 rounded-full bg-rose-100 dark:bg-rose-500/20 text-rose-600 dark:text-rose-400 flex-shrink-0">
+                                                    <div class="flex items-center justify-center w-5 h-5 rounded-full bg-rose-100 dark:bg-rose-900 text-rose-600 dark:text-rose-400 flex-shrink-0">
                                                         <x-heroicon-m-x-mark style="width: 12px; height: 12px;"/>
                                                     </div>
                                                 @endif
@@ -132,7 +132,7 @@
                             </table>
                         </div>
                     @else
-                        <div class="h-full min-h-[200px] flex flex-col items-center justify-center text-sm text-gray-500 dark:text-gray-400 italic border-2 border-dashed rounded-lg p-8 dark:border-gray-700 bg-gray-50/50 dark:bg-gray-900/20">
+                        <div class="h-full min-h-[200px] flex flex-col items-center justify-center text-sm text-gray-500 dark:text-gray-400 italic border-2 border-dashed rounded-lg p-8 dark:border-gray-700 bg-gray-50 dark:bg-gray-900">
                             <div style="width: 48px; height: 48px; margin-bottom: 12px;">
                                 <x-heroicon-o-document-magnifying-glass class="text-gray-400 dark:text-gray-500"/>
                             </div>
@@ -178,67 +178,67 @@
                     <div class="overflow-x-auto rounded-lg border border-gray-200 dark:border-gray-700">
                         <table class="w-full text-center text-xs border-collapse">
                             <thead>
-                                <tr class="bg-gray-50 dark:bg-transparent font-mono text-[11px] text-gray-700 dark:text-gray-300 border-b border-gray-200 dark:border-gray-700">
+                                <tr class="bg-gray-50 dark:bg-gray-800 font-mono text-[11px] text-gray-700 dark:text-gray-300 border-b border-gray-200 dark:border-gray-700">
                                     <th class="p-3 text-left font-extrabold uppercase tracking-wider">Param</th>
                                     @for($i=0; $i<24; $i++)
                                         <th class="p-2 border-l border-gray-200 dark:border-gray-700 font-bold">{{ sprintf('%02d', $i) }}</th>
                                     @endfor
                                 </tr>
                             </thead>
-                            <tbody class="divide-y divide-gray-100 dark:divide-gray-800 text-[11px] bg-white dark:bg-gray-900/30">
+                            <tbody class="divide-y divide-gray-100 dark:divide-gray-700 text-[11px] bg-white dark:bg-gray-900">
                                 <!-- Row TAF -->
-                                <tr class="hover:bg-gray-50 dark:hover:bg-white/5 transition-colors">
+                                <tr class="hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors">
                                     <td class="p-3 text-left font-bold text-gray-700 dark:text-gray-300 whitespace-nowrap">
                                         <div class="flex items-center gap-2">
                                             <div class="w-2 h-2 rounded-full bg-emerald-500"></div> TAF
                                         </div>
                                     </td>
                                     @for($i=0; $i<24; $i++)
-                                        <td class="p-2 border-l border-gray-100 dark:border-gray-800">
+                                        <td class="p-2 border-l border-gray-100 dark:border-gray-700">
                                             @if($hourlyStatus[$i]['taf'])
                                                 <div class="w-3 h-3 mx-auto rounded-full bg-emerald-500"></div>
                                             @else
-                                                <div class="w-2 h-2 mx-auto rounded-full bg-gray-200 dark:bg-gray-800"></div>
+                                                <div class="w-2 h-2 mx-auto rounded-full bg-gray-200 dark:bg-gray-700"></div>
                                             @endif
                                         </td>
                                     @endfor
                                 </tr>
                                 <!-- Row METAR -->
-                                <tr class="hover:bg-gray-50 dark:hover:bg-white/5 transition-colors">
+                                <tr class="hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors">
                                     <td class="p-3 text-left font-bold text-gray-700 dark:text-gray-300 whitespace-nowrap">
                                         <div class="flex items-center gap-2">
                                             <div class="w-2 h-2 rounded-full bg-blue-500"></div> METAR
                                         </div>
                                     </td>
                                     @for($i=0; $i<24; $i++)
-                                        <td class="p-2 border-l border-gray-100 dark:border-gray-800">
+                                        <td class="p-2 border-l border-gray-100 dark:border-gray-700">
                                             @if($hourlyStatus[$i]['metar'])
                                                 <div class="w-3 h-3 mx-auto rounded-full bg-blue-500"></div>
                                             @else
-                                                <div class="w-2 h-2 mx-auto rounded-full bg-gray-200 dark:bg-gray-800"></div>
+                                                <div class="w-2 h-2 mx-auto rounded-full bg-gray-200 dark:bg-gray-700"></div>
                                             @endif
                                         </td>
                                     @endfor
                                 </tr>
                                 <!-- Row Score 00 -->
-                                <tr class="hover:bg-gray-50 dark:hover:bg-white/5 transition-colors">
+                                <tr class="hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors">
                                     <td class="p-3 text-left font-bold text-gray-700 dark:text-gray-300 whitespace-nowrap">Skor 00</td>
                                     @for($i=0; $i<24; $i++)
-                                        <td class="p-2 border-l border-gray-100 dark:border-gray-800">
+                                        <td class="p-2 border-l border-gray-100 dark:border-gray-700">
                                             <span class="inline-flex items-center justify-center w-7 h-7 rounded-md font-mono font-bold text-xs
-                                                {{ $hourlyStatus[$i]['score00'] === 7 ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-500/20 dark:text-emerald-400' : ($hourlyStatus[$i]['score00'] !== null ? 'bg-rose-100 text-rose-700 dark:bg-rose-500/20 dark:text-rose-400' : 'bg-gray-100 text-gray-500 dark:bg-gray-800 dark:text-gray-400') }}">
+                                                {{ $hourlyStatus[$i]['score00'] === 7 ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900 dark:text-emerald-400' : ($hourlyStatus[$i]['score00'] !== null ? 'bg-rose-100 text-rose-700 dark:bg-rose-900 dark:text-rose-400' : 'bg-gray-100 text-gray-500 dark:bg-gray-700 dark:text-gray-400') }}">
                                                 {{ $hourlyStatus[$i]['score00'] ?? '-' }}
                                             </span>
                                         </td>
                                     @endfor
                                 </tr>
                                 <!-- Row Score 30 -->
-                                <tr class="hover:bg-gray-50 dark:hover:bg-white/5 transition-colors">
+                                <tr class="hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors">
                                     <td class="p-3 text-left font-bold text-gray-700 dark:text-gray-300 whitespace-nowrap">Skor 30</td>
                                     @for($i=0; $i<24; $i++)
-                                        <td class="p-2 border-l border-gray-100 dark:border-gray-800">
+                                        <td class="p-2 border-l border-gray-100 dark:border-gray-700">
                                             <span class="inline-flex items-center justify-center w-7 h-7 rounded-md font-mono font-bold text-xs
-                                                {{ $hourlyStatus[$i]['score30'] === 7 ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-500/20 dark:text-emerald-400' : ($hourlyStatus[$i]['score30'] !== null ? 'bg-rose-100 text-rose-700 dark:bg-rose-500/20 dark:text-rose-400' : 'bg-gray-100 text-gray-500 dark:bg-gray-800 dark:text-gray-400') }}">
+                                                {{ $hourlyStatus[$i]['score30'] === 7 ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900 dark:text-emerald-400' : ($hourlyStatus[$i]['score30'] !== null ? 'bg-rose-100 text-rose-700 dark:bg-rose-900 dark:text-rose-400' : 'bg-gray-100 text-gray-500 dark:bg-gray-700 dark:text-gray-400') }}">
                                                 {{ $hourlyStatus[$i]['score30'] ?? '-' }}
                                             </span>
                                         </td>
@@ -253,7 +253,7 @@
             {{-- Ringkasan Akurasi (Chart) --}}
             <div class="lg:col-span-4">
                 <x-filament::section icon="heroicon-m-chart-pie" header="Ringkasan Akurasi" class="h-full flex flex-col">
-                    <div class="flex-1 flex flex-col items-center justify-center p-6 bg-gray-50 dark:bg-gray-900/30 rounded-lg">
+                    <div class="flex-1 flex flex-col items-center justify-center p-6 bg-gray-50 dark:bg-gray-900 rounded-lg">
                         
                         <!-- Area Chart -->
                         <div class="relative w-48 h-48 mb-6">
@@ -266,14 +266,14 @@
                         
                         <!-- Kotak Statistik -->
                         <div class="w-full grid grid-cols-2 gap-4 text-center mt-auto">
-                            <div class="bg-white dark:bg-gray-800/50 p-4 rounded-lg border border-gray-200 dark:border-gray-700">
+                            <div class="bg-white dark:bg-gray-800 p-4 rounded-lg border border-gray-200 dark:border-gray-700">
                                 <div class="flex items-center justify-center gap-1.5 mb-1">
                                     <div class="w-2 h-2 rounded-full bg-emerald-500"></div>
                                     <div class="text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Tepat</div>
                                 </div>
                                 <div class="text-2xl font-black text-emerald-600 dark:text-emerald-400">{{ $summary['passed'] }}</div>
                             </div>
-                            <div class="bg-white dark:bg-gray-800/50 p-4 rounded-lg border border-gray-200 dark:border-gray-700">
+                            <div class="bg-white dark:bg-gray-800 p-4 rounded-lg border border-gray-200 dark:border-gray-700">
                                 <div class="flex items-center justify-center gap-1.5 mb-1">
                                     <div class="w-2 h-2 rounded-full bg-rose-500"></div>
                                     <div class="text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Meleset</div>
