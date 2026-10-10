@@ -8,7 +8,9 @@
             <div class="flex flex-col sm:flex-row items-center justify-between gap-4">
                 <div class="flex items-center gap-4">
                     <div class="p-3 rounded-2xl bg-gradient-to-br from-primary-500/20 to-primary-500/5 text-primary-600 ring-1 ring-primary-500/20 shadow-inner">
-                        <x-heroicon-m-signal class="w-7 h-7 animate-pulse" />
+                        <div style="width: 28px; height: 28px;">
+                            <x-heroicon-m-signal class="animate-pulse" />
+                        </div>
                     </div>
                     <div>
                         <h2 class="text-lg font-extrabold text-gray-900 dark:text-white tracking-tight">
@@ -22,7 +24,9 @@
 
                 <div class="flex flex-wrap items-center gap-3">
                     <div class="flex items-center gap-2 bg-gray-50 dark:bg-gray-800/80 px-4 py-2 rounded-xl border border-gray-200 dark:border-white/10 text-sm shadow-sm transition-colors focus-within:ring-2 focus-within:ring-primary-500">
-                        <x-heroicon-o-calendar class="w-4 h-4 text-gray-400" />
+                        <div style="width: 16px; height: 16px;">
+                            <x-heroicon-o-calendar class="text-gray-400" />
+                        </div>
                         <span class="text-gray-500 dark:text-gray-400 font-semibold">Tanggal:</span>
                         <input type="date" 
                                wire:model.live="selectedDate" 
@@ -30,7 +34,9 @@
                     </div>
 
                     <div class="flex items-center gap-2 bg-gray-50 dark:bg-gray-800/80 px-4 py-2 rounded-xl border border-gray-200 dark:border-white/10 text-sm shadow-sm">
-                        <x-heroicon-o-map-pin class="w-4 h-4 text-gray-400" />
+                        <div style="width: 16px; height: 16px;">
+                            <x-heroicon-o-map-pin class="text-gray-400" />
+                        </div>
                         <span class="text-gray-500 dark:text-gray-400 font-semibold">Stasiun:</span>
                         <span class="font-mono font-bold text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-500/10 px-2 py-0.5 rounded-md">WITN</span>
                     </div>
@@ -54,7 +60,9 @@
                 <div class="space-y-4 bg-gray-50 dark:bg-gray-800/50 p-5 rounded-2xl border border-gray-100 dark:border-white/5">
                     <div>
                         <label class="flex items-center gap-2 text-sm font-bold text-gray-700 dark:text-gray-300 mb-2">
-                            <x-heroicon-m-pencil-square class="w-4 h-4 text-primary-500"/>
+                            <div style="width: 16px; height: 16px;">
+                                <x-heroicon-m-pencil-square class="text-primary-500"/>
+                            </div>
                             INPUT SANDI TAFOR
                         </label>
                         <textarea wire:model.defer="rawTaf" rows="6" class="w-full rounded-xl border-gray-300 dark:border-white/10 dark:bg-gray-900 shadow-inner focus:border-primary-500 focus:ring-primary-500 text-sm font-mono leading-relaxed" placeholder="Ketik atau paste sandi TAFOR di sini...&#10;Contoh: FTID40 WITN 290500 CCA TAF COR..."></textarea>
@@ -74,13 +82,17 @@
                     @if(!empty($qcResult))
                         <div class="mb-4 p-4 rounded-xl text-sm shadow-sm flex items-start gap-3 border {{ $qcResult['is_valid'] ? 'bg-emerald-50 border-emerald-200 text-emerald-800 dark:bg-emerald-500/10 dark:border-emerald-500/20 dark:text-emerald-400' : 'bg-rose-50 border-rose-200 text-rose-800 dark:bg-rose-500/10 dark:border-rose-500/20 dark:text-rose-400' }}">
                             @if($qcResult['is_valid'])
-                                <x-heroicon-m-check-circle class="w-6 h-6 text-emerald-500 shrink-0"/>
+                                <div style="width: 24px; height: 24px; flex-shrink: 0;">
+                                    <x-heroicon-m-check-circle class="text-emerald-500"/>
+                                </div>
                                 <div>
                                     <span class="font-bold block text-base">Sandi TAF Valid</span>
                                     <span class="opacity-90">Tidak ditemukan kesalahan penulisan format standar.</span>
                                 </div>
                             @else
-                                <x-heroicon-m-x-circle class="w-6 h-6 text-rose-500 shrink-0"/>
+                                <div style="width: 24px; height: 24px; flex-shrink: 0;">
+                                    <x-heroicon-m-x-circle class="text-rose-500"/>
+                                </div>
                                 <div>
                                     <span class="font-bold block text-base">Sandi TAF perlu diperbaiki</span>
                                     <span class="opacity-90">Ditemukan <strong class="font-extrabold">{{ $qcResult['errors'] }}</strong> elemen yang tidak sesuai standar pengiriman.</span>
@@ -104,9 +116,13 @@
                                             <td class="p-3 border-r dark:border-white/10">{{ $res['rule'] }}</td>
                                             <td class="p-3 flex items-center gap-2">
                                                 @if($res['is_valid'])
-                                                    <x-heroicon-m-check class="w-4 h-4 text-emerald-500"/>
+                                                    <div style="width: 16px; height: 16px;">
+                                                        <x-heroicon-m-check class="text-emerald-500"/>
+                                                    </div>
                                                 @else
-                                                    <x-heroicon-m-exclamation-triangle class="w-4 h-4 text-rose-500"/>
+                                                    <div style="width: 16px; height: 16px;">
+                                                        <x-heroicon-m-exclamation-triangle class="text-rose-500"/>
+                                                    </div>
                                                 @endif
                                                 {{ $res['remark'] }}
                                             </td>
@@ -117,7 +133,9 @@
                         </div>
                     @else
                         <div class="h-full min-h-[200px] flex flex-col items-center justify-center text-sm text-gray-400 italic border-2 border-dashed rounded-2xl p-8 dark:border-white/10 bg-gray-50/50 dark:bg-gray-800/20">
-                            <x-heroicon-o-document-magnifying-glass class="w-12 h-12 text-gray-300 dark:text-gray-600 mb-3"/>
+                            <div style="width: 48px; height: 48px; margin-bottom: 12px;">
+                                <x-heroicon-o-document-magnifying-glass class="text-gray-300 dark:text-gray-600"/>
+                            </div>
                             <p class="text-center">Silakan masukkan sandi TAFOR di kolom kiri<br>lalu klik <strong class="font-semibold text-primary-500">Verifikasi TAFOR</strong> untuk melihat hasil pengecekan.</p>
                         </div>
                     @endif
