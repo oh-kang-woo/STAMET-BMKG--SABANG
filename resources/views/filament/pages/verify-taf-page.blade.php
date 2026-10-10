@@ -1,5 +1,7 @@
 <x-filament-panels::page>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <!-- Tambahan library untuk memunculkan angka di atas chart -->
+    <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2.2.0"></script>
 
     <div wire:poll.300s="refreshData" class="space-y-6">
 
@@ -231,6 +233,9 @@
 
     <script>
         document.addEventListener('livewire:initialized', () => {
+            // Registrasi plugin datalabels
+            Chart.register(ChartDataLabels);
+
             const initChart = () => {
                 const ctx = document.getElementById('parameterChart');
                 if(ctx) {
@@ -262,6 +267,11 @@
                         options: {
                             responsive: true,
                             maintainAspectRatio: false,
+                            layout: {
+                                padding: {
+                                    top: 30 // Padding tambahan agar angka di atas tidak terpotong tepi atas chart
+                                }
+                            },
                             scales: {
                                 y: {
                                     beginAtZero: true,
@@ -278,6 +288,18 @@
                                         label: function(context) {
                                             return context.parsed.y + '% Akurat';
                                         }
+                                    }
+                                },
+                                // Konfigurasi datalabels untuk menampilkan nilai statis di atas bar
+                                datalabels: {
+                                    anchor: 'end',
+                                    align: 'top',
+                                    color: '#374151',
+                                    font: {
+                                        weight: 'bold'
+                                    },
+                                    formatter: function(value) {
+                                        return value + '%';
                                     }
                                 }
                             }
