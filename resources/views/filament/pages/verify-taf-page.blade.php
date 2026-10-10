@@ -111,7 +111,8 @@
                                 </thead>
                                 <tbody class="divide-y divide-gray-200 dark:divide-gray-700 bg-white dark:bg-gray-900">
                                     @foreach($qcResult['results'] as $res)
-                                        <tr class="{{ $res['is_valid'] ? 'text-gray-800 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors' : 'bg-rose-50 dark:bg-rose-900/40 text-rose-800 dark:text-rose-300 hover:bg-rose-100 dark:hover:bg-rose-900/60 transition-colors' }}">
+                                        <!-- Dihapus hover class-nya agar tidak bentrok -->
+                                        <tr class="{{ $res['is_valid'] ? 'text-gray-800 dark:text-gray-300' : 'bg-rose-50 dark:bg-rose-900/40 text-rose-800 dark:text-rose-300' }}">
                                             <td class="p-3 border-r dark:border-gray-700 font-mono font-bold text-primary-600 dark:text-primary-400">{{ $res['element'] }}</td>
                                             <td class="p-3 border-r dark:border-gray-700 font-medium">{{ $res['rule'] }}</td>
                                             <td class="p-3 flex items-center gap-2.5 font-medium">
@@ -173,7 +174,7 @@
         <div class="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
 
             {{-- Matriks Ketersediaan Data Telemetri --}}
-            <div class="lg:col-span-8">
+            <div class="lg:col-span-7">
                 <x-filament::section icon="heroicon-m-table-cells" header="Matriks Ketersediaan & Akurasi (24 Jam UTC)">
                     <div class="overflow-x-auto rounded-lg border border-gray-200 dark:border-gray-700">
                         <table class="w-full text-center text-xs border-collapse">
@@ -186,8 +187,8 @@
                                 </tr>
                             </thead>
                             <tbody class="divide-y divide-gray-100 dark:divide-gray-700 text-[11px] bg-white dark:bg-gray-900">
-                                <!-- Row TAF -->
-                                <tr class="hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors">
+                                <!-- Dihapus hover class-nya -->
+                                <tr>
                                     <td class="p-3 text-left font-bold text-gray-700 dark:text-gray-300 whitespace-nowrap">
                                         <div class="flex items-center gap-2">
                                             <div class="w-2 h-2 rounded-full bg-emerald-500"></div> TAF
@@ -203,8 +204,7 @@
                                         </td>
                                     @endfor
                                 </tr>
-                                <!-- Row METAR -->
-                                <tr class="hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors">
+                                <tr>
                                     <td class="p-3 text-left font-bold text-gray-700 dark:text-gray-300 whitespace-nowrap">
                                         <div class="flex items-center gap-2">
                                             <div class="w-2 h-2 rounded-full bg-blue-500"></div> METAR
@@ -220,8 +220,7 @@
                                         </td>
                                     @endfor
                                 </tr>
-                                <!-- Row Score 00 -->
-                                <tr class="hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors">
+                                <tr>
                                     <td class="p-3 text-left font-bold text-gray-700 dark:text-gray-300 whitespace-nowrap">Skor 00</td>
                                     @for($i=0; $i<24; $i++)
                                         <td class="p-2 border-l border-gray-100 dark:border-gray-700">
@@ -232,8 +231,7 @@
                                         </td>
                                     @endfor
                                 </tr>
-                                <!-- Row Score 30 -->
-                                <tr class="hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors">
+                                <tr>
                                     <td class="p-3 text-left font-bold text-gray-700 dark:text-gray-300 whitespace-nowrap">Skor 30</td>
                                     @for($i=0; $i<24; $i++)
                                         <td class="p-2 border-l border-gray-100 dark:border-gray-700">
@@ -250,33 +248,34 @@
                 </x-filament::section>
             </div>
 
-            {{-- Ringkasan Akurasi (Chart) --}}
-            <div class="lg:col-span-4">
+            {{-- Ringkasan Akurasi (Chart) - Tampilan Bersampingan --}}
+            <div class="lg:col-span-5">
                 <x-filament::section icon="heroicon-m-chart-pie" header="Ringkasan Akurasi" class="h-full flex flex-col">
-                    <div class="flex-1 flex flex-col items-center justify-center p-6 bg-gray-50 dark:bg-gray-900 rounded-lg">
+                    <div class="flex-1 flex flex-col sm:flex-row items-center justify-between p-6 bg-gray-50 dark:bg-gray-900 rounded-lg gap-8">
                         
-                        <!-- Area Chart -->
-                        <div class="relative w-48 h-48 mb-6">
+                        <!-- Kiri: Area Chart -->
+                        <div class="relative w-40 h-40 flex-shrink-0">
                             <canvas id="accuracyChart"></canvas>
                             <div class="absolute inset-0 flex items-center justify-center flex-col pointer-events-none">
-                                <span class="text-4xl font-extrabold tracking-tighter">{{ $summary['accuracy'] }}%</span>
-                                <span class="text-[10px] font-bold text-gray-500 dark:text-gray-400 uppercase tracking-widest mt-1">Akurasi</span>
+                                <span class="text-3xl font-extrabold tracking-tighter">{{ $summary['accuracy'] }}%</span>
+                                <span class="text-[9px] font-bold text-gray-500 dark:text-gray-400 uppercase tracking-widest mt-1">Akurasi</span>
                             </div>
                         </div>
                         
-                        <!-- Kotak Statistik -->
-                        <div class="w-full grid grid-cols-2 gap-4 text-center mt-auto">
-                            <div class="bg-white dark:bg-gray-800 p-4 rounded-lg border border-gray-200 dark:border-gray-700">
-                                <div class="flex items-center justify-center gap-1.5 mb-1">
-                                    <div class="w-2 h-2 rounded-full bg-emerald-500"></div>
-                                    <div class="text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Tepat</div>
+                        <!-- Kanan: Kotak Statistik -->
+                        <div class="w-full flex-1 flex flex-col gap-4">
+                            <div class="bg-white dark:bg-gray-800 p-4 rounded-lg border border-gray-200 dark:border-gray-700 flex items-center justify-between">
+                                <div class="flex items-center gap-2">
+                                    <div class="w-2.5 h-2.5 rounded-full bg-emerald-500"></div>
+                                    <div class="text-sm font-bold text-gray-500 dark:text-gray-300 uppercase tracking-wider">Tepat</div>
                                 </div>
                                 <div class="text-2xl font-black text-emerald-600 dark:text-emerald-400">{{ $summary['passed'] }}</div>
                             </div>
-                            <div class="bg-white dark:bg-gray-800 p-4 rounded-lg border border-gray-200 dark:border-gray-700">
-                                <div class="flex items-center justify-center gap-1.5 mb-1">
-                                    <div class="w-2 h-2 rounded-full bg-rose-500"></div>
-                                    <div class="text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Meleset</div>
+                            
+                            <div class="bg-white dark:bg-gray-800 p-4 rounded-lg border border-gray-200 dark:border-gray-700 flex items-center justify-between">
+                                <div class="flex items-center gap-2">
+                                    <div class="w-2.5 h-2.5 rounded-full bg-rose-500"></div>
+                                    <div class="text-sm font-bold text-gray-500 dark:text-gray-300 uppercase tracking-wider">Meleset</div>
                                 </div>
                                 <div class="text-2xl font-black text-rose-600 dark:text-rose-400">{{ $summary['failed'] }}</div>
                             </div>
