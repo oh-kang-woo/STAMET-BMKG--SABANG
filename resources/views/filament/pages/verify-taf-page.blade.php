@@ -80,13 +80,13 @@
                 <!-- Kanan: Hasil QC -->
                 <div class="flex flex-col h-full">
                     @if(!empty($qcResult))
-                        <div class="mb-4 p-4 rounded-lg text-sm flex items-start gap-3 border {{ $qcResult['is_valid'] ? 'bg-emerald-50 border-emerald-200 text-emerald-800 dark:bg-emerald-500/10 dark:border-emerald-500/20 dark:text-emerald-400' : 'bg-rose-50 border-rose-200 text-rose-800 dark:bg-rose-500/10 dark:border-rose-500/20 dark:text-rose-400' }}">
+                        <div class="mb-4 p-4 rounded-lg text-sm flex items-start gap-3 border {{ $qcResult['is_valid'] ? 'bg-emerald-50 border-emerald-200 text-emerald-800 dark:bg-emerald-500/10 dark:border-emerald-500/30 dark:text-emerald-300' : 'bg-rose-50 border-rose-200 text-rose-800 dark:bg-rose-500/10 dark:border-rose-500/30 dark:text-rose-300' }}">
                             @if($qcResult['is_valid'])
                                 <div style="width: 24px; height: 24px; flex-shrink: 0;">
                                     <x-heroicon-m-check-circle class="text-emerald-500"/>
                                 </div>
                                 <div>
-                                    <span class="font-bold block text-base">Sandi TAF Valid</span>
+                                    <span class="font-bold block text-base text-emerald-900 dark:text-emerald-400">Sandi TAF Valid</span>
                                     <span class="opacity-90">Tidak ditemukan kesalahan penulisan format standar.</span>
                                 </div>
                             @else
@@ -94,7 +94,7 @@
                                     <x-heroicon-m-x-circle class="text-rose-500"/>
                                 </div>
                                 <div>
-                                    <span class="font-bold block text-base">Sandi TAF perlu diperbaiki</span>
+                                    <span class="font-bold block text-base text-rose-900 dark:text-rose-400">Sandi TAF perlu diperbaiki</span>
                                     <span class="opacity-90">Ditemukan <strong class="font-extrabold">{{ $qcResult['errors'] }}</strong> elemen yang tidak sesuai standar pengiriman.</span>
                                 </div>
                             @endif
@@ -102,26 +102,26 @@
                         
                         <div class="overflow-x-auto border rounded-lg dark:border-gray-700 flex-1">
                             <table class="w-full text-sm text-left">
-                                <thead class="bg-gray-50 dark:bg-gray-800 border-b dark:border-gray-700">
+                                <thead class="bg-gray-100 dark:bg-gray-800/80 border-b dark:border-gray-700">
                                     <tr>
-                                        <th class="p-3 border-r dark:border-gray-700 font-bold text-gray-700 dark:text-gray-300">Elemen</th>
-                                        <th class="p-3 border-r dark:border-gray-700 font-bold text-gray-700 dark:text-gray-300">Aturan QC</th>
-                                        <th class="p-3 font-bold text-gray-700 dark:text-gray-300">Keterangan</th>
+                                        <th class="p-3 border-r dark:border-gray-700 font-bold text-gray-900 dark:text-gray-100">Elemen</th>
+                                        <th class="p-3 border-r dark:border-gray-700 font-bold text-gray-900 dark:text-gray-100">Aturan QC</th>
+                                        <th class="p-3 font-bold text-gray-900 dark:text-gray-100">Keterangan</th>
                                     </tr>
                                 </thead>
-                                <tbody class="divide-y divide-gray-100 dark:divide-gray-800">
+                                <tbody class="divide-y divide-gray-200 dark:divide-gray-700/50 bg-white dark:bg-gray-900/30">
                                     @foreach($qcResult['results'] as $res)
-                                        <tr class="{{ $res['is_valid'] ? 'text-gray-700 dark:text-gray-300' : 'bg-rose-50/50 dark:bg-rose-900/20 text-rose-700 dark:text-rose-400' }}">
-                                            <td class="p-3 border-r dark:border-gray-700 font-mono font-semibold">{{ $res['element'] }}</td>
-                                            <td class="p-3 border-r dark:border-gray-700">{{ $res['rule'] }}</td>
-                                            <td class="p-3 flex items-center gap-2">
+                                        <tr class="{{ $res['is_valid'] ? 'text-gray-800 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-white/5 transition-colors' : 'bg-rose-50/50 dark:bg-rose-900/20 text-rose-800 dark:text-rose-300 hover:bg-rose-100/50 dark:hover:bg-rose-900/30 transition-colors' }}">
+                                            <td class="p-3 border-r dark:border-gray-700/50 font-mono font-bold text-primary-600 dark:text-primary-400">{{ $res['element'] }}</td>
+                                            <td class="p-3 border-r dark:border-gray-700/50 font-medium">{{ $res['rule'] }}</td>
+                                            <td class="p-3 flex items-center gap-2.5 font-medium">
                                                 @if($res['is_valid'])
-                                                    <div style="width: 16px; height: 16px;">
-                                                        <x-heroicon-m-check class="text-emerald-500"/>
+                                                    <div class="flex items-center justify-center w-5 h-5 rounded-full bg-emerald-100 dark:bg-emerald-500/20 text-emerald-600 dark:text-emerald-400 flex-shrink-0">
+                                                        <x-heroicon-m-check style="width: 12px; height: 12px;"/>
                                                     </div>
                                                 @else
-                                                    <div style="width: 16px; height: 16px;">
-                                                        <x-heroicon-m-exclamation-triangle class="text-rose-500"/>
+                                                    <div class="flex items-center justify-center w-5 h-5 rounded-full bg-rose-100 dark:bg-rose-500/20 text-rose-600 dark:text-rose-400 flex-shrink-0">
+                                                        <x-heroicon-m-x-mark style="width: 12px; height: 12px;"/>
                                                     </div>
                                                 @endif
                                                 {{ $res['remark'] }}
@@ -132,9 +132,9 @@
                             </table>
                         </div>
                     @else
-                        <div class="h-full min-h-[200px] flex flex-col items-center justify-center text-sm text-gray-500 dark:text-gray-400 italic border-2 border-dashed rounded-lg p-8 dark:border-gray-700">
+                        <div class="h-full min-h-[200px] flex flex-col items-center justify-center text-sm text-gray-500 dark:text-gray-400 italic border-2 border-dashed rounded-lg p-8 dark:border-gray-700 bg-gray-50/50 dark:bg-gray-900/20">
                             <div style="width: 48px; height: 48px; margin-bottom: 12px;">
-                                <x-heroicon-o-document-magnifying-glass class="text-gray-400 dark:text-gray-600"/>
+                                <x-heroicon-o-document-magnifying-glass class="text-gray-400 dark:text-gray-500"/>
                             </div>
                             <p class="text-center">Silakan masukkan sandi TAFOR di kolom kiri<br>lalu klik <strong class="font-semibold text-primary-500">Verifikasi TAFOR</strong>.</p>
                         </div>
