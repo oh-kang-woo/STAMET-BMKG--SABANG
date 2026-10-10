@@ -26,6 +26,106 @@ class VerifyTafPage extends Page implements HasActions
     public string $selectedDate;
     public string $icao = 'WITN';
 
+    // === TAMBAHAN UNTUK FITUR QC ===
+    public string $rawTaf = '';
+    public array $qcResult = [];
+
+    public function checkQualityControl(): void
+    {
+        $rawTaf = strtoupper(trim(preg_replace('/\s+/', ' ', $this->rawTaf)));
+        if (empty($rawTaf)) {
+            $this->qcResult = [];
+            return;
+        }
+
+        $results = [];
+        $errors = 0;
+        $parts = explode(' ', $rawTaf);
+
+        // 1. Cek Header FTID
+        if (isset($parts[0]) && preg_match('/^FT[A-Z]{2}\d{2}$/', $parts[0])) {
+            $results[] = ['element' => $parts[0], 'rule' => 'QC Header TAF', 'remark' => 'Header awal sesuai ketentuan.', 'is_valid' => true];
+        } else {
+            $results[] = ['element' => $parts[0] ?? '-', 'rule' => 'QC Header TAF', 'remark' => 'Header wajib FTID40 atau sejenisnya.', 'is_valid' => false];
+            $errors++;
+        }
+
+        // 2. Cek Jenis Sandi & ICAO
+        $type = '';
+        $icao = '';
+        $timeIdx = 0;
+
+        if (in_array('TAF', $parts)) {
+            $tafIdx = array_search('TAF', $parts);
+            $type = 'TAF';
+            if (isset($parts[$tafIdx + 1]) && in_array($parts[$tafIdx + 1], ['AMD', 'COR'])) {
+                $type .= ' ' . $parts[$tafIdx + 1];
+                $icao = $parts[$tafIdx + 2] ?? '';
+                $timeIdx = $tafIdx + 3;
+            } else {
+                $icao = $parts[$tafIdx + 1] ?? '';
+                $timeIdx = $tafIdx + 2;
+            }
+            $results[] = ['element' => $type, 'rule' => 'Jenis Prakiraan', 'remark' => "Sandi $type valid.", 'is_valid' => true];
+            
+            if (strlen($icao) === 4) {
+                $results[] = ['element' => $icao, 'rule' => 'Indikator Lokasi', 'remark' => "ICAO ($icao) valid.", 'is_valid' => true];
+            } else {
+                $results[] = ['element' => $icao, 'rule' => 'Indikator Lokasi', 'remark' => 'ICAO harus 4 huruf.', 'is_valid' => false];
+                $errors++;
+            }
+        }
+
+        // 3. Cek Waktu
+        $time = $parts[$timeIdx] ?? '';
+        if (preg_match('/^\d{6}Z$/', $time)) {
+            $results[] = ['element' => $time, 'rule' => 'Waktu Penerbitan', 'remark' => 'Format DDHHMMZ valid.', 'is_valid' => true];
+        } else {
+            $results[] = ['element' => $time, 'rule' => 'Waktu Penerbitan', 'remark' => 'Format salah (harus Z).', 'is_valid' => false];
+            $errors++;
+        }
+
+        // 4. Cek Periode Validitas
+        $validity = $parts[$timeIdx + 1] ?? '';
+        if (preg_match('/^\d{4}\/\d{4}$/', $validity)) {
+            $results[] = ['element' => $validity, 'rule' => 'Periode Validitas', 'remark' => 'Format DDHH/DDHH valid.', 'is_valid' => true];
+        } else {
+            $results[] = ['element' => $validity, 'rule' => 'Periode Validitas', 'remark' => 'Format harus DDHH/DDHH.', 'is_valid' => false];
+            $errors++;
+        }
+
+        // 5. Cek Angin
+        $wind = $parts[$timeIdx + 2] ?? '';
+        if (preg_match('/^(VRB|\d{3})\d{2,3}(G\d{2,3})?KT$/', $wind)) {
+            $results[] = ['element' => $wind, 'rule' => 'Angin Permukaan', 'remark' => 'Format valid.', 'is_valid' => true];
+        } else {
+            $results[] = ['element' => $wind, 'rule' => 'Angin Permukaan', 'remark' => 'Format tidak sesuai standar.', 'is_valid' => false];
+            $errors++;
+        }
+
+        // 6. Cek Visibility
+        $vis = $parts[$timeIdx + 3] ?? '';
+        if (preg_match('/^(\d{4}|CAVOK)$/', $vis)) {
+            $results[] = ['element' => $vis, 'rule' => 'Visibility', 'remark' => 'Format valid.', 'is_valid' => true];
+        } else {
+            $results[] = ['element' => $vis, 'rule' => 'Visibility', 'remark' => 'Harus 4 digit/CAVOK.', 'is_valid' => false];
+            $errors++;
+        }
+
+        $this->qcResult = [
+            'results' => $results,
+            'errors' => $errors,
+            'is_valid' => $errors === 0
+        ];
+    }
+
+    public function clearQualityControl(): void
+    {
+        $this->rawTaf = '';
+        $this->qcResult = [];
+    }
+    // === AKHIR TAMBAHAN QC ===
+
     public function mount(): void
     {
         $this->selectedDate = now()->toDateString();

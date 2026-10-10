@@ -44,6 +44,68 @@
             </div>
         </x-filament::section>
 
+        {{-- TAMBAHAN SECTION QC TAFOR --}}
+        <x-filament::section icon="heroicon-o-shield-check" header="Quality Control Sandi TAFOR Sebelum Kirim">
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                
+                <!-- Kiri: Form Input -->
+                <div class="space-y-4">
+                    <div>
+                        <label class="block text-xs font-bold text-gray-700 dark:text-gray-300 mb-1">INPUT SANDI TAFOR</label>
+                        <textarea wire:model.defer="rawTaf" rows="5" class="w-full rounded-lg border-gray-300 dark:border-white/10 dark:bg-gray-900 shadow-sm focus:border-primary-500 focus:ring-primary-500 text-sm font-mono" placeholder="Contoh: FTID40 WITN 290500 CCA TAF COR..."></textarea>
+                    </div>
+                    <div class="flex gap-2">
+                        <x-filament::button wire:click="checkQualityControl" color="primary" size="sm">
+                            Verifikasi TAFOR
+                        </x-filament::button>
+                        <x-filament::button wire:click="clearQualityControl" color="gray" size="sm">
+                            Bersihkan
+                        </x-filament::button>
+                    </div>
+                </div>
+
+                <!-- Kanan: Hasil QC -->
+                <div>
+                    @if(!empty($qcResult))
+                        <div class="mb-3 p-3 rounded-lg text-sm {{ $qcResult['is_valid'] ? 'bg-emerald-50 text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-400' : 'bg-rose-50 text-rose-700 dark:bg-rose-500/10 dark:text-rose-400' }}">
+                            @if($qcResult['is_valid'])
+                                <span class="font-bold">✓ Sandi TAF Valid</span> — Tidak ada temuan.
+                            @else
+                                <span class="font-bold">✗ Sandi TAF perlu diperbaiki</span> — {{ $qcResult['errors'] }} temuan.
+                            @endif
+                        </div>
+                        
+                        <div class="overflow-x-auto border rounded-lg dark:border-white/10">
+                            <table class="w-full text-xs text-left">
+                                <thead class="bg-gray-50 dark:bg-white/5 border-b dark:border-white/10">
+                                    <tr>
+                                        <th class="p-2 border-r dark:border-white/10 font-bold">Elemen</th>
+                                        <th class="p-2 border-r dark:border-white/10 font-bold">Aturan QC</th>
+                                        <th class="p-2 font-bold">Keterangan</th>
+                                    </tr>
+                                </thead>
+                                <tbody class="divide-y divide-gray-200 dark:divide-white/10">
+                                    @foreach($qcResult['results'] as $res)
+                                        <tr class="{{ $res['is_valid'] ? 'text-emerald-600 dark:text-emerald-400' : 'text-rose-600 dark:text-rose-400 font-bold bg-rose-50/50 dark:bg-rose-900/10' }}">
+                                            <td class="p-2 border-r dark:border-white/10 font-mono">{{ $res['element'] }}</td>
+                                            <td class="p-2 border-r dark:border-white/10">{{ $res['rule'] }}</td>
+                                            <td class="p-2">{{ $res['remark'] }}</td>
+                                        </tr>
+                                    @endforeach
+                                </tbody>
+                            </table>
+                        </div>
+                    @else
+                        <div class="h-full flex items-center justify-center text-sm text-gray-400 italic border-2 border-dashed rounded-lg p-6 dark:border-white/10">
+                            Silakan masukkan sandi TAFOR dan klik Verifikasi untuk melihat hasil QC.
+                        </div>
+                    @endif
+                </div>
+
+            </div>
+        </x-filament::section>
+        {{-- AKHIR SECTION QC TAFOR --}}
+
         @php
             $summary = $this->realtimeData['summary'];
             $rows = $this->realtimeData['rows'];
@@ -87,68 +149,55 @@
                     <div class="overflow-x-auto">
                         <table class="w-full text-center text-xs border-collapse">
                             <thead>
-                                <tr class="bg-gray-50 dark:bg-white/5 font-mono text-[11px] text-gray-600 dark:text-gray-300">
-                                    <th class="py-2.5 px-3 text-left w-20 font-sans font-bold">JAM</th>
-                                    @for($h = 0; $h < 24; $h++)
-                                        <th class="py-2.5 px-0.5 min-w-[32px] font-semibold">{{ sprintf('%02d', $h) }}</th>
+                                <tr class="bg-gray-50 dark:bg-white/5 font-mono text-[11px] text-gray-600 dark:text-gray-400 border-b dark:border-white/10">
+                                    <th class="p-2 text-left font-semibold">Param</th>
+                                    @for($i=0; $i<24; $i++)
+                                        <th class="p-2 border-l dark:border-white/10 font-semibold">{{ sprintf('%02d', $i) }}</th>
                                     @endfor
                                 </tr>
                             </thead>
-                            <tbody class="divide-y divide-gray-200 dark:divide-white/5 font-mono text-[10px]">
-                                {{-- Row TAF --}}
+                            <tbody class="divide-y divide-gray-200 dark:divide-white/10 text-[11px]">
+                                <!-- Row TAF -->
                                 <tr>
-                                    <td class="py-2.5 px-3 text-left font-sans font-bold text-cyan-600 dark:text-cyan-400">TAF</td>
-                                    @for($h = 0; $h < 24; $h++)
-                                        <td class="py-2.5 px-0.5">
-                                            @if($hourlyStatus[$h]['taf'])
-                                                <span class="inline-flex items-center justify-center w-7 py-1 rounded-md text-[10px] font-extrabold bg-cyan-500/15 text-cyan-700 dark:text-cyan-300">
-                                                    On
-                                                </span>
+                                    <td class="p-2 text-left font-bold text-gray-700 dark:text-gray-300">TAF</td>
+                                    @for($i=0; $i<24; $i++)
+                                        <td class="p-2 border-l dark:border-white/10">
+                                            @if($hourlyStatus[$i]['taf'])
+                                                <div class="w-3 h-3 mx-auto rounded-full bg-emerald-500"></div>
                                             @else
-                                                <span class="inline-flex items-center justify-center w-7 py-1 text-gray-400 dark:text-gray-600">-</span>
+                                                <div class="w-3 h-3 mx-auto rounded-full bg-gray-200 dark:bg-gray-700"></div>
                                             @endif
                                         </td>
                                     @endfor
                                 </tr>
-
-                                {{-- Row METAR --}}
+                                <!-- Row METAR -->
                                 <tr>
-                                    <td class="py-2.5 px-3 text-left font-sans font-bold text-emerald-600 dark:text-emerald-400">METAR</td>
-                                    @for($h = 0; $h < 24; $h++)
-                                        <td class="py-2.5 px-0.5">
-                                            @if($hourlyStatus[$h]['metar'])
-                                                <span class="inline-flex items-center justify-center w-7 py-1 rounded-md text-[10px] font-extrabold bg-emerald-500/15 text-emerald-700 dark:text-emerald-300">
-                                                    On
-                                                </span>
+                                    <td class="p-2 text-left font-bold text-gray-700 dark:text-gray-300">METAR</td>
+                                    @for($i=0; $i<24; $i++)
+                                        <td class="p-2 border-l dark:border-white/10">
+                                            @if($hourlyStatus[$i]['metar'])
+                                                <div class="w-3 h-3 mx-auto rounded-full bg-blue-500"></div>
                                             @else
-                                                <span class="inline-flex items-center justify-center w-7 py-1 text-gray-400 dark:text-gray-600">-</span>
+                                                <div class="w-3 h-3 mx-auto rounded-full bg-gray-200 dark:bg-gray-700"></div>
                                             @endif
                                         </td>
                                     @endfor
                                 </tr>
-
-                                {{-- Row VERIFIKASI --}}
+                                <!-- Row Score 00 -->
                                 <tr>
-                                    <td class="py-2.5 px-3 text-left font-sans font-bold text-indigo-600 dark:text-indigo-400">VERIF</td>
-                                    @for($h = 0; $h < 24; $h++)
-                                        @php
-                                            $s00 = $hourlyStatus[$h]['score00'];
-                                            $s30 = $hourlyStatus[$h]['score30'];
-                                            $isFull = ($s00 === 7 && ($s30 === 7 || $s30 === null));
-                                            $hasDev = ($s00 !== null && $s00 < 7) || ($s30 !== null && $s30 < 7);
-                                        @endphp
-                                        <td class="py-2.5 px-0.5">
-                                            @if($isFull)
-                                                <span class="inline-flex items-center justify-center w-7 py-1 rounded-md text-[10px] font-extrabold bg-indigo-500/20 text-indigo-700 dark:text-indigo-300">
-                                                    ✓
-                                                </span>
-                                            @elseif($hasDev)
-                                                <span class="inline-flex items-center justify-center w-7 py-1 rounded-md text-[10px] font-extrabold bg-rose-500/20 text-rose-700 dark:text-rose-300">
-                                                    !
-                                                </span>
-                                            @else
-                                                <span class="inline-flex items-center justify-center w-7 py-1 text-gray-400 dark:text-gray-600">-</span>
-                                            @endif
+                                    <td class="p-2 text-left font-bold text-gray-700 dark:text-gray-300">Skor 00</td>
+                                    @for($i=0; $i<24; $i++)
+                                        <td class="p-2 border-l dark:border-white/10 font-mono font-bold {{ $hourlyStatus[$i]['score00'] === 7 ? 'text-emerald-600' : ($hourlyStatus[$i]['score00'] !== null ? 'text-rose-600' : 'text-gray-400') }}">
+                                            {{ $hourlyStatus[$i]['score00'] ?? '-' }}
+                                        </td>
+                                    @endfor
+                                </tr>
+                                <!-- Row Score 30 -->
+                                <tr>
+                                    <td class="p-2 text-left font-bold text-gray-700 dark:text-gray-300">Skor 30</td>
+                                    @for($i=0; $i<24; $i++)
+                                        <td class="p-2 border-l dark:border-white/10 font-mono font-bold {{ $hourlyStatus[$i]['score30'] === 7 ? 'text-emerald-600' : ($hourlyStatus[$i]['score30'] !== null ? 'text-rose-600' : 'text-gray-400') }}">
+                                            {{ $hourlyStatus[$i]['score30'] ?? '-' }}
                                         </td>
                                     @endfor
                                 </tr>
@@ -158,230 +207,59 @@
                 </x-filament::section>
             </div>
 
-            {{-- Pie Chart Visual Ringkasan --}}
+            {{-- Ringkasan Akurasi (Chart) --}}
             <div class="lg:col-span-4">
-                <x-filament::section icon="heroicon-m-chart-pie" header="Proporsi Akurasi TAF">
-                    <div class="flex flex-col items-center justify-center p-2" x-data="{
-                        init() {
-                            const ctx = document.getElementById('tafPieChart');
-                            if (ctx) {
-                                new Chart(ctx, {
-                                    type: 'doughnut',
-                                    data: {
-                                        labels: ['Sesuai SOP', 'Deviasi / Degradasi'],
-                                        datasets: [{
-                                            data: [{{ $summary['passed'] }}, {{ $summary['failed'] }}],
-                                            backgroundColor: ['#10b981', '#f43f5e'],
-                                            borderWidth: 0,
-                                            borderRadius: 4
-                                        }]
-                                    },
-                                    options: {
-                                        responsive: true,
-                                        maintainAspectRatio: false,
-                                        plugins: {
-                                            legend: {
-                                                position: 'bottom',
-                                                labels: { color: '#9ca3af', font: { size: 11, weight: '600' }, padding: 12 }
-                                            }
-                                        },
-                                        cutout: '74%'
-                                    }
-                                });
-                            }
-                        }
-                    }">
-                        <div class="relative w-44 h-44 my-1 flex items-center justify-center">
-                            <canvas id="tafPieChart"></canvas>
-                            <div class="absolute inset-0 flex flex-col items-center justify-center text-center pointer-events-none">
-                                <span class="text-2xl font-black text-gray-900 dark:text-white">{{ $summary['accuracy'] }}%</span>
-                                <span class="text-[10px] font-bold text-gray-400 uppercase tracking-wider">AKURASI</span>
+                <x-filament::section icon="heroicon-m-chart-pie" header="Ringkasan Akurasi Harian">
+                    <div class="flex flex-col items-center justify-center p-4">
+                        <div class="relative w-40 h-40">
+                            <canvas id="accuracyChart"></canvas>
+                            <div class="absolute inset-0 flex items-center justify-center flex-col">
+                                <span class="text-3xl font-bold text-gray-800 dark:text-gray-200">{{ $summary['accuracy'] }}%</span>
+                            </div>
+                        </div>
+                        <div class="mt-6 w-full grid grid-cols-2 gap-4 text-center">
+                            <div class="bg-emerald-50 dark:bg-emerald-500/10 p-3 rounded-lg border border-emerald-100 dark:border-emerald-500/20">
+                                <div class="text-xl font-bold text-emerald-600 dark:text-emerald-400">{{ $summary['passed'] }}</div>
+                                <div class="text-[10px] font-bold text-emerald-600/70 dark:text-emerald-400/70 uppercase">Tepat</div>
+                            </div>
+                            <div class="bg-rose-50 dark:bg-rose-500/10 p-3 rounded-lg border border-rose-100 dark:border-rose-500/20">
+                                <div class="text-xl font-bold text-rose-600 dark:text-rose-400">{{ $summary['failed'] }}</div>
+                                <div class="text-[10px] font-bold text-rose-600/70 dark:text-rose-400/70 uppercase">Meleset</div>
                             </div>
                         </div>
                     </div>
                 </x-filament::section>
             </div>
-
         </div>
-
-        {{-- Stat Cards Overview --}}
-        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-            
-            <x-filament::section>
-                <div class="flex items-center justify-between">
-                    <span class="text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Akurasi Total</span>
-                    <x-filament::badge :color="$summary['accuracy'] >= 80 ? 'success' : 'warning'">
-                        {{ $summary['accuracy'] >= 80 ? 'EXCELLENT' : 'WARNING' }}
-                    </x-filament::badge>
-                </div>
-                <div class="mt-3">
-                    <span class="text-4xl font-extrabold tracking-tight text-gray-950 dark:text-white">
-                        {{ $summary['accuracy'] }}%
-                    </span>
-                </div>
-                <div class="mt-2 text-xs text-gray-500 dark:text-gray-400 flex justify-between border-t border-gray-100 dark:border-white/5 pt-2">
-                    <span>Evaluasi Slot:</span>
-                    <span class="font-mono font-bold">{{ $summary['total'] }} Slot</span>
-                </div>
-            </x-filament::section>
-
-            <x-filament::section>
-                <div class="flex items-center justify-between">
-                    <span class="text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Slot Sesuai SOP</span>
-                    <x-filament::badge color="success">PASSED</x-filament::badge>
-                </div>
-                <div class="mt-3">
-                    <span class="text-4xl font-extrabold tracking-tight text-emerald-600 dark:text-emerald-400">
-                        {{ $summary['passed'] }}
-                    </span>
-                </div>
-                <div class="mt-2 text-xs text-gray-500 dark:text-gray-400 flex justify-between border-t border-gray-100 dark:border-white/5 pt-2">
-                    <span>Rasio Kesesuaian:</span>
-                    <span class="font-mono font-bold text-emerald-600 dark:text-emerald-400">
-                        {{ $summary['total'] > 0 ? round(($summary['passed'] / $summary['total']) * 100) : 0 }}%
-                    </span>
-                </div>
-            </x-filament::section>
-
-            <x-filament::section>
-                <div class="flex items-center justify-between">
-                    <span class="text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Slot Deviasi</span>
-                    <x-filament::badge color="danger">DEVIATION</x-filament::badge>
-                </div>
-                <div class="mt-3">
-                    <span class="text-4xl font-extrabold tracking-tight text-rose-600 dark:text-rose-400">
-                        {{ $summary['failed'] }}
-                    </span>
-                </div>
-                <div class="mt-2 text-xs text-gray-500 dark:text-gray-400 flex justify-between border-t border-gray-100 dark:border-white/5 pt-2">
-                    <span>Slot Terdegradasi:</span>
-                    <span class="font-mono font-bold text-rose-600 dark:text-rose-400">{{ $summary['failed'] }} Slot</span>
-                </div>
-            </x-filament::section>
-
-            <x-filament::section>
-                <div class="text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-2">
-                    7 Parameter SOP
-                </div>
-                <div class="space-y-1.5 overflow-y-auto max-h-20 pr-1">
-                    @foreach($summary['paramStats'] as $param)
-                        @php
-                            $rate = $param['total'] > 0 ? round(($param['pass'] / $param['total']) * 100) : 0;
-                        @endphp
-                        <div class="flex items-center justify-between text-xs">
-                            <span class="text-gray-600 dark:text-gray-300 truncate max-w-[100px]">{{ $param['label'] }}</span>
-                            <div class="flex items-center gap-1.5">
-                                <div class="w-12 bg-gray-200 dark:bg-gray-800 rounded-full h-1 overflow-hidden">
-                                    <div class="bg-primary-500 h-1 rounded-full" style="width: {{ $rate }}%"></div>
-                                </div>
-                                <span class="font-mono text-[11px] font-bold text-primary-600 dark:text-primary-400">{{ $rate }}%</span>
-                            </div>
-                        </div>
-                    @endforeach
-                </div>
-            </x-filament::section>
-
-        </div>
-
-        {{-- Stream Data Log Table --}}
-        <x-filament::section icon="heroicon-m-queue-list" header="Data Stream Log Verifikasi Realtime (30-Menit Slot)">
-            <div class="overflow-x-auto -mx-6 -mb-6">
-                <table class="w-full text-left text-xs divide-y divide-gray-200 dark:divide-white/10">
-                    <thead class="bg-gray-50 dark:bg-white/5 text-gray-700 dark:text-gray-300 font-bold uppercase tracking-wider text-[11px]">
-                        <tr>
-                            <th class="py-3 px-4">Jam (UTC)</th>
-                            <th class="py-3 px-3">Group</th>
-                            <th class="py-3 px-4">Status Stream</th>
-                            <th class="py-3 px-2 text-center">Dir</th>
-                            <th class="py-3 px-2 text-center">Spd</th>
-                            <th class="py-3 px-2 text-center">Gust</th>
-                            <th class="py-3 px-2 text-center">Vis</th>
-                            <th class="py-3 px-2 text-center">Cuaca</th>
-                            <th class="py-3 px-2 text-center">Awan</th>
-                            <th class="py-3 px-2 text-center">Ceiling</th>
-                            <th class="py-3 px-3 text-center">Detail</th>
-                        </tr>
-                    </thead>
-                    
-                    @forelse($rows as $row)
-                        <tbody x-data="{ open: false }" class="divide-y divide-gray-200 dark:divide-white/5 font-mono">
-                            <tr class="hover:bg-gray-50/50 dark:hover:bg-white/[0.02] transition cursor-pointer" @click="open = !open">
-                                <td class="py-3 px-4 font-bold text-primary-600 dark:text-primary-400 whitespace-nowrap">
-                                    {{ $row['time'] }}
-                                </td>
-                                <td class="py-3 px-3 whitespace-nowrap">
-                                    <x-filament::badge color="gray" size="sm">
-                                        {{ $row['group'] }}
-                                    </x-filament::badge>
-                                </td>
-
-                                <td class="py-3 px-4 font-sans">
-                                    @if($row['scores'])
-                                        <span class="inline-flex items-center gap-1.5 text-xs text-emerald-600 dark:text-emerald-400 font-semibold">
-                                            <span class="w-2 h-2 rounded-full bg-emerald-500"></span>
-                                            Sesuai SOP
-                                        </span>
-                                    @else
-                                        <span class="inline-flex items-center gap-1.5 text-xs text-gray-400 dark:text-gray-500 italic">
-                                            <span class="w-2 h-2 rounded-full bg-gray-400"></span>
-                                            Data Belum Lengkap
-                                        </span>
-                                    @endif
-                                </td>
-
-                                @if($row['scores'])
-                                    @foreach(['wind_dir', 'wind_speed', 'gust', 'visibility', 'precip', 'cloud', 'ceiling'] as $param)
-                                        <td class="py-3 px-2 text-center whitespace-nowrap">
-                                            @if(($row['scores'][$param] ?? 0) == 1)
-                                                <x-filament::badge color="success" size="sm">1</x-filament::badge>
-                                            @else
-                                                <x-filament::badge color="danger" size="sm">0</x-filament::badge>
-                                            @endif
-                                        </td>
-                                    @endforeach
-                                @else
-                                    <td colspan="7" class="py-3 px-4 text-center italic text-gray-400 dark:text-gray-500 text-[11px]">
-                                        -
-                                    </td>
-                                @endif
-
-                                <td class="py-3 px-3 text-center">
-                                    <button type="button" class="p-1 rounded-lg text-gray-400 hover:text-gray-600 dark:hover:text-gray-200">
-                                        <x-heroicon-m-chevron-down class="w-4 h-4 transition-transform duration-200" ::class="open ? 'rotate-180' : ''" />
-                                    </button>
-                                </td>
-                            </tr>
-
-                            <tr x-show="open" x-cloak x-transition class="bg-gray-50/80 dark:bg-gray-900/60 font-mono">
-                                <td colspan="11" class="p-4">
-                                    <div class="space-y-2 border-l-2 border-primary-500 pl-4">
-                                        <div class="text-xs">
-                                            <span class="font-bold text-primary-600 dark:text-primary-400 mr-2">[TAF RAW]</span>
-                                            <span class="text-gray-800 dark:text-gray-200">{{ $row['taf_raw'] }}</span>
-                                        </div>
-                                        <div class="text-xs">
-                                            <span class="font-bold text-emerald-600 dark:text-emerald-400 mr-2">[METAR RAW]</span>
-                                            <span class="text-gray-800 dark:text-gray-200">{{ $row['metar_raw'] }}</span>
-                                        </div>
-                                    </div>
-                                </td>
-                            </tr>
-                        </tbody>
-                    @empty
-                        <tbody class="font-sans">
-                            <tr>
-                                <td colspan="11" class="py-8 text-center text-gray-500 dark:text-gray-400">
-                                    Tidak ada data verifikasi untuk rentang waktu ini.
-                                </td>
-                            </tr>
-                        </tbody>
-                    @endforelse
-                </table>
-            </div>
-        </x-filament::section>
-
     </div>
 
-    {{-- Modal Pop-Up Container dari Filament Actions --}}
-    <x-filament-actions::modals />
+    <script>
+        document.addEventListener('livewire:initialized', () => {
+            const initChart = () => {
+                const ctx = document.getElementById('accuracyChart');
+                if(ctx) {
+                    if(window.tafChart) { window.tafChart.destroy(); }
+                    window.tafChart = new Chart(ctx, {
+                        type: 'doughnut',
+                        data: {
+                            labels: ['Tepat', 'Meleset'],
+                            datasets: [{
+                                data: [{{ $summary['passed'] }}, {{ $summary['failed'] }}],
+                                backgroundColor: ['#10b981', '#f43f5e'],
+                                borderWidth: 0,
+                                cutout: '75%'
+                            }]
+                        },
+                        options: {
+                            responsive: true,
+                            maintainAspectRatio: false,
+                            plugins: { legend: { display: false }, tooltip: { enabled: true } }
+                        }
+                    });
+                }
+            };
+            initChart();
+            Livewire.hook('morph.updated', () => { initChart(); });
+        });
+    </script>
 </x-filament-panels::page>
