@@ -147,6 +147,11 @@
         @php
             $summary = $this->realtimeData['summary'];
             $rows = $this->realtimeData['rows'];
+            
+            // Ambil row paling atas (terbaru) untuk ditampilkan di card TAF/METAR aktif
+            $latestRow = $rows[0] ?? null;
+            $activeTafRaw = $latestRow['taf_raw'] ?? 'Data tidak tersedia';
+            $activeMetarRaw = $latestRow['metar_raw'] ?? 'Data tidak tersedia';
         @endphp
 
         <div class="grid grid-cols-1 gap-6 items-start">
@@ -158,6 +163,25 @@
                     <canvas id="parameterChart"></canvas>
                 </div>
             </x-filament::section>
+
+            {{-- 2 KOLOM UNTUK SANDI TAF & METAR AKTIF --}}
+            <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                {{-- TAF YANG SEDANG BERLAKU --}}
+                <x-filament::section header="TAF YANG SEDANG BERLAKU">
+                    <div class="text-sm text-gray-500 mb-2">Pesan TAF lengkap yang digunakan untuk jam aktif.</div>
+                    <div class="p-4 bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg font-mono text-sm text-gray-800 dark:text-gray-200 whitespace-pre-wrap">
+                        {{ $activeTafRaw }}
+                    </div>
+                </x-filament::section>
+
+                {{-- METAR/SPECI PADA JAM AKTIF --}}
+                <x-filament::section header="METAR/SPECI PADA JAM AKTIF">
+                    <div class="text-sm text-gray-500 mb-2">Laporan yang digunakan; COR diprioritaskan pada waktu/jenis yang sama.</div>
+                    <div class="p-4 bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg font-mono text-sm text-gray-800 dark:text-gray-200 whitespace-pre-wrap">
+                        {{ $activeMetarRaw }}
+                    </div>
+                </x-filament::section>
+            </div>
 
             {{-- TABEL VERIFIKASI PER JAM --}}
             <x-filament::section icon="heroicon-m-table-cells" header="Verifikasi Per Jam">
@@ -216,7 +240,6 @@
                     const labels = [];
                     const data = [];
                     
-                    // Warna sesuai referensi bar chart pada gambar (biru, hijau, kuning, ungu, tosca, merah, nila)
                     const colors = ['#3b82f6', '#10b981', '#f59e0b', '#8b5cf6', '#06b6d4', '#f43f5e', '#6366f1'];
 
                     Object.values(paramStats).forEach(stat => {
@@ -255,17 +278,6 @@
                                         label: function(context) {
                                             return context.parsed.y + '% Akurat';
                                         }
-                                    }
-                                },
-                                // Plugin untuk menampilkan persentase di atas bar
-                                datalabels: {
-                                    anchor: 'end',
-                                    align: 'top',
-                                    formatter: function(value) {
-                                        return value + '%';
-                                    },
-                                    font: {
-                                        weight: 'bold'
                                     }
                                 }
                             }
