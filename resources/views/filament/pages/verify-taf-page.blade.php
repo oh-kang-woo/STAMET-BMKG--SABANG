@@ -102,16 +102,16 @@
                         
                         <div class="overflow-x-auto border rounded-lg dark:border-gray-700 flex-1">
                             <table class="w-full text-sm text-left">
-                                <thead class="bg-gray-100 dark:bg-gray-800/80 border-b dark:border-gray-700">
+                                <thead class="border-b dark:border-gray-700">
                                     <tr>
-                                        <th class="p-3 border-r dark:border-gray-700 font-bold text-gray-900 dark:text-gray-100">Elemen</th>
-                                        <th class="p-3 border-r dark:border-gray-700 font-bold text-gray-900 dark:text-gray-100">Aturan QC</th>
-                                        <th class="p-3 font-bold text-gray-900 dark:text-gray-100">Keterangan</th>
+                                        <th class="p-3 border-r dark:border-gray-700 font-bold text-gray-900 dark:text-gray-200">Elemen</th>
+                                        <th class="p-3 border-r dark:border-gray-700 font-bold text-gray-900 dark:text-gray-200">Aturan QC</th>
+                                        <th class="p-3 font-bold text-gray-900 dark:text-gray-200">Keterangan</th>
                                     </tr>
                                 </thead>
-                                <tbody class="divide-y divide-gray-200 dark:divide-gray-700/50 bg-white dark:bg-gray-900/30">
+                                <tbody class="divide-y divide-gray-200 dark:divide-gray-700/50 bg-white dark:bg-transparent">
                                     @foreach($qcResult['results'] as $res)
-                                        <tr class="{{ $res['is_valid'] ? 'text-gray-800 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-white/5 transition-colors' : 'bg-rose-50/50 dark:bg-rose-900/20 text-rose-800 dark:text-rose-300 hover:bg-rose-100/50 dark:hover:bg-rose-900/30 transition-colors' }}">
+                                        <tr class="{{ $res['is_valid'] ? 'text-gray-800 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-white/5 transition-colors' : 'bg-rose-50/50 dark:bg-rose-900/20 text-rose-800 dark:text-rose-300 hover:bg-rose-100/50 dark:hover:bg-rose-900/30 transition-colors' }}">
                                             <td class="p-3 border-r dark:border-gray-700/50 font-mono font-bold text-primary-600 dark:text-primary-400">{{ $res['element'] }}</td>
                                             <td class="p-3 border-r dark:border-gray-700/50 font-medium">{{ $res['rule'] }}</td>
                                             <td class="p-3 flex items-center gap-2.5 font-medium">
@@ -178,14 +178,14 @@
                     <div class="overflow-x-auto rounded-lg border border-gray-200 dark:border-gray-700">
                         <table class="w-full text-center text-xs border-collapse">
                             <thead>
-                                <tr class="bg-gray-100 dark:bg-gray-800 font-mono text-[11px] text-gray-700 dark:text-gray-200 border-b border-gray-200 dark:border-gray-700">
+                                <tr class="bg-gray-50 dark:bg-transparent font-mono text-[11px] text-gray-700 dark:text-gray-300 border-b border-gray-200 dark:border-gray-700">
                                     <th class="p-3 text-left font-extrabold uppercase tracking-wider">Param</th>
                                     @for($i=0; $i<24; $i++)
                                         <th class="p-2 border-l border-gray-200 dark:border-gray-700 font-bold">{{ sprintf('%02d', $i) }}</th>
                                     @endfor
                                 </tr>
                             </thead>
-                            <tbody class="divide-y divide-gray-100 dark:divide-gray-800 text-[11px] bg-white dark:bg-gray-900">
+                            <tbody class="divide-y divide-gray-100 dark:divide-gray-800 text-[11px] bg-white dark:bg-gray-900/30">
                                 <!-- Row TAF -->
                                 <tr class="hover:bg-gray-50 dark:hover:bg-white/5 transition-colors">
                                     <td class="p-3 text-left font-bold text-gray-700 dark:text-gray-300 whitespace-nowrap">
@@ -253,7 +253,7 @@
             {{-- Ringkasan Akurasi (Chart) --}}
             <div class="lg:col-span-4">
                 <x-filament::section icon="heroicon-m-chart-pie" header="Ringkasan Akurasi" class="h-full flex flex-col">
-                    <div class="flex-1 flex flex-col items-center justify-center p-6 bg-gray-50 dark:bg-gray-900 rounded-lg">
+                    <div class="flex-1 flex flex-col items-center justify-center p-6 bg-gray-50 dark:bg-gray-900/30 rounded-lg">
                         
                         <!-- Area Chart -->
                         <div class="relative w-48 h-48 mb-6">
@@ -266,14 +266,14 @@
                         
                         <!-- Kotak Statistik -->
                         <div class="w-full grid grid-cols-2 gap-4 text-center mt-auto">
-                            <div class="bg-white dark:bg-gray-800 p-4 rounded-lg border border-gray-200 dark:border-gray-700">
+                            <div class="bg-white dark:bg-gray-800/50 p-4 rounded-lg border border-gray-200 dark:border-gray-700">
                                 <div class="flex items-center justify-center gap-1.5 mb-1">
                                     <div class="w-2 h-2 rounded-full bg-emerald-500"></div>
                                     <div class="text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Tepat</div>
                                 </div>
                                 <div class="text-2xl font-black text-emerald-600 dark:text-emerald-400">{{ $summary['passed'] }}</div>
                             </div>
-                            <div class="bg-white dark:bg-gray-800 p-4 rounded-lg border border-gray-200 dark:border-gray-700">
+                            <div class="bg-white dark:bg-gray-800/50 p-4 rounded-lg border border-gray-200 dark:border-gray-700">
                                 <div class="flex items-center justify-center gap-1.5 mb-1">
                                     <div class="w-2 h-2 rounded-full bg-rose-500"></div>
                                     <div class="text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Meleset</div>
