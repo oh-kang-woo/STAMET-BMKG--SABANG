@@ -111,7 +111,6 @@
                                 </thead>
                                 <tbody class="divide-y divide-gray-200 dark:divide-gray-700 bg-white dark:bg-gray-900">
                                     @foreach($qcResult['results'] as $res)
-                                        <!-- Dihapus hover class-nya agar tidak bentrok -->
                                         <tr class="{{ $res['is_valid'] ? 'text-gray-800 dark:text-gray-300' : 'bg-rose-50 dark:bg-rose-900/40 text-rose-800 dark:text-rose-300' }}">
                                             <td class="p-3 border-r dark:border-gray-700 font-mono font-bold text-primary-600 dark:text-primary-400">{{ $res['element'] }}</td>
                                             <td class="p-3 border-r dark:border-gray-700 font-medium">{{ $res['rule'] }}</td>
@@ -148,179 +147,127 @@
         @php
             $summary = $this->realtimeData['summary'];
             $rows = $this->realtimeData['rows'];
-
-            // Map Data 24-Jam UTC
-            $hourlyStatus = [];
-            for ($h = 0; $h < 24; $h++) {
-                $hStr = sprintf('%02d', $h);
-                $slot00 = null;
-                $slot30 = null;
-
-                foreach ($rows as $r) {
-                    if (str_starts_with($r['time'], $hStr . ':00')) $slot00 = $r;
-                    if (str_starts_with($r['time'], $hStr . ':30')) $slot30 = $r;
-                }
-
-                $hourlyStatus[$h] = [
-                    'taf' => ($slot00 && ($slot00['taf_raw'] ?? '') !== 'Data TAF Belum Tersedia') || ($slot30 && ($slot30['taf_raw'] ?? '') !== 'Data TAF Belum Tersedia'),
-                    'metar' => ($slot00 && ($slot00['metar_raw'] ?? '') !== 'Data METAR Belum Tersedia') || ($slot30 && ($slot30['metar_raw'] ?? '') !== 'Data METAR Belum Tersedia'),
-                    'score00' => ($slot00 && is_array($slot00['scores'] ?? null)) ? array_sum($slot00['scores']) : null,
-                    'score30' => ($slot30 && is_array($slot30['scores'] ?? null)) ? array_sum($slot30['scores']) : null,
-                ];
-            }
         @endphp
 
-        {{-- Section Utama: Matriks 24-Jam & Pie Chart --}}
-        <div class="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+        <div class="grid grid-cols-1 gap-6 items-start">
+            
+            {{-- BAR CHART PERSENTASE VERIFIKASI PARAMETER CUACA --}}
+            <x-filament::section icon="heroicon-m-chart-bar" header="Persentase Verifikasi Parameter Cuaca">
+                <div class="text-sm text-gray-500 mb-4">Rata-rata hasil verifikasi otomatis berdasarkan observasi yang tersedia.</div>
+                <div class="relative w-full h-64">
+                    <canvas id="parameterChart"></canvas>
+                </div>
+            </x-filament::section>
 
-            {{-- Matriks Ketersediaan Data Telemetri --}}
-            <div class="lg:col-span-7">
-                <x-filament::section icon="heroicon-m-table-cells" header="Matriks Ketersediaan & Akurasi (24 Jam UTC)">
-                    <div class="overflow-x-auto rounded-lg border border-gray-200 dark:border-gray-700">
-                        <table class="w-full text-center text-xs border-collapse">
-                            <thead>
-                                <tr class="bg-gray-50 dark:bg-gray-800 font-mono text-[11px] text-gray-700 dark:text-gray-300 border-b border-gray-200 dark:border-gray-700">
-                                    <th class="p-3 text-left font-extrabold uppercase tracking-wider">Param</th>
-                                    @for($i=0; $i<24; $i++)
-                                        <th class="p-2 border-l border-gray-200 dark:border-gray-700 font-bold">{{ sprintf('%02d', $i) }}</th>
-                                    @endfor
-                                </tr>
-                            </thead>
-                            <tbody class="divide-y divide-gray-100 dark:divide-gray-700 text-[11px] bg-white dark:bg-gray-900">
-                                <!-- Dihapus hover class-nya -->
+            {{-- TABEL VERIFIKASI PER JAM --}}
+            <x-filament::section icon="heroicon-m-table-cells" header="Verifikasi Per Jam">
+                <div class="text-sm text-gray-500 mb-4">Setiap jam yang memiliki observasi akan dihitung ulang.</div>
+                <div class="overflow-x-auto rounded-lg border border-gray-200 dark:border-gray-700">
+                    <table class="w-full text-center text-xs border-collapse">
+                        <thead>
+                            <tr class="bg-gray-50 dark:bg-gray-800 font-bold text-gray-700 dark:text-gray-300 border-b border-gray-200 dark:border-gray-700">
+                                <th class="p-3">Jam UTC</th>
+                                <th class="p-3">TAF</th>
+                                <th class="p-3">METAR/SPECI</th>
+                                <th class="p-3">Arah</th>
+                                <th class="p-3">Kec. Angin</th>
+                                <th class="p-3">Gust</th>
+                                <th class="p-3">Visibility</th>
+                                <th class="p-3">Cuaca</th>
+                                <th class="p-3">Cloud</th>
+                                <th class="p-3">Cloud Base</th>
+                            </tr>
+                        </thead>
+                        <tbody class="divide-y divide-gray-100 dark:divide-gray-700 text-[11px] bg-white dark:bg-gray-900">
+                            @foreach($rows as $row)
                                 <tr>
-                                    <td class="p-3 text-left font-bold text-gray-700 dark:text-gray-300 whitespace-nowrap">
-                                        <div class="flex items-center gap-2">
-                                            <div class="w-2 h-2 rounded-full bg-emerald-500"></div> TAF
-                                        </div>
-                                    </td>
-                                    @for($i=0; $i<24; $i++)
-                                        <td class="p-2 border-l border-gray-100 dark:border-gray-700">
-                                            @if($hourlyStatus[$i]['taf'])
-                                                <div class="w-3 h-3 mx-auto rounded-full bg-emerald-500"></div>
-                                            @else
-                                                <div class="w-2 h-2 mx-auto rounded-full bg-gray-200 dark:bg-gray-700"></div>
-                                            @endif
-                                        </td>
-                                    @endfor
+                                    <td class="p-3 font-mono font-bold">{{ $row['time'] }}</td>
+                                    <td class="p-3">{{ $row['taf_raw'] !== 'Data TAF Belum Tersedia' ? '1' : '-' }}</td>
+                                    <td class="p-3">{{ $row['metar_raw'] !== 'Data METAR Belum Tersedia' ? '1' : '-' }}</td>
+                                    
+                                    @if(isset($row['scores']) && is_array($row['scores']))
+                                        <td class="p-3">{!! isset($row['scores']['wind_dir']) ? ($row['scores']['wind_dir'] ? '<span class="text-emerald-500">100.0% (1/1)</span>' : '<span class="text-rose-500">0.0% (0/1)</span>') : '-' !!}</td>
+                                        <td class="p-3">{!! isset($row['scores']['wind_speed']) ? ($row['scores']['wind_speed'] ? '<span class="text-emerald-500">100.0% (1/1)</span>' : '<span class="text-rose-500">0.0% (0/1)</span>') : '-' !!}</td>
+                                        <td class="p-3">{!! isset($row['scores']['gust']) ? ($row['scores']['gust'] ? '<span class="text-emerald-500">100.0% (1/1)</span>' : '<span class="text-rose-500">0.0% (0/1)</span>') : '-' !!}</td>
+                                        <td class="p-3">{!! isset($row['scores']['visibility']) ? ($row['scores']['visibility'] ? '<span class="text-emerald-500">100.0% (1/1)</span>' : '<span class="text-rose-500">0.0% (0/1)</span>') : '-' !!}</td>
+                                        <td class="p-3">{!! isset($row['scores']['precip']) ? ($row['scores']['precip'] ? '<span class="text-emerald-500">100.0% (1/1)</span>' : '<span class="text-rose-500">0.0% (0/1)</span>') : '-' !!}</td>
+                                        <td class="p-3">{!! isset($row['scores']['cloud']) ? ($row['scores']['cloud'] ? '<span class="text-emerald-500">100.0% (1/1)</span>' : '<span class="text-rose-500">0.0% (0/1)</span>') : '-' !!}</td>
+                                        <td class="p-3">{!! isset($row['scores']['ceiling']) ? ($row['scores']['ceiling'] ? '<span class="text-emerald-500">100.0% (1/1)</span>' : '<span class="text-rose-500">0.0% (0/1)</span>') : '-' !!}</td>
+                                    @else
+                                        <td class="p-3">-</td><td class="p-3">-</td><td class="p-3">-</td><td class="p-3">-</td><td class="p-3">-</td><td class="p-3">-</td><td class="p-3">-</td>
+                                    @endif
                                 </tr>
-                                <tr>
-                                    <td class="p-3 text-left font-bold text-gray-700 dark:text-gray-300 whitespace-nowrap">
-                                        <div class="flex items-center gap-2">
-                                            <div class="w-2 h-2 rounded-full bg-blue-500"></div> METAR
-                                        </div>
-                                    </td>
-                                    @for($i=0; $i<24; $i++)
-                                        <td class="p-2 border-l border-gray-100 dark:border-gray-700">
-                                            @if($hourlyStatus[$i]['metar'])
-                                                <div class="w-3 h-3 mx-auto rounded-full bg-blue-500"></div>
-                                            @else
-                                                <div class="w-2 h-2 mx-auto rounded-full bg-gray-200 dark:bg-gray-700"></div>
-                                            @endif
-                                        </td>
-                                    @endfor
-                                </tr>
-                                <tr>
-                                    <td class="p-3 text-left font-bold text-gray-700 dark:text-gray-300 whitespace-nowrap">Skor 00</td>
-                                    @for($i=0; $i<24; $i++)
-                                        <td class="p-2 border-l border-gray-100 dark:border-gray-700">
-                                            <span class="inline-flex items-center justify-center w-7 h-7 rounded-md font-mono font-bold text-xs
-                                                {{ $hourlyStatus[$i]['score00'] === 7 ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900 dark:text-emerald-400' : ($hourlyStatus[$i]['score00'] !== null ? 'bg-rose-100 text-rose-700 dark:bg-rose-900 dark:text-rose-400' : 'bg-gray-100 text-gray-500 dark:bg-gray-700 dark:text-gray-400') }}">
-                                                {{ $hourlyStatus[$i]['score00'] ?? '-' }}
-                                            </span>
-                                        </td>
-                                    @endfor
-                                </tr>
-                                <tr>
-                                    <td class="p-3 text-left font-bold text-gray-700 dark:text-gray-300 whitespace-nowrap">Skor 30</td>
-                                    @for($i=0; $i<24; $i++)
-                                        <td class="p-2 border-l border-gray-100 dark:border-gray-700">
-                                            <span class="inline-flex items-center justify-center w-7 h-7 rounded-md font-mono font-bold text-xs
-                                                {{ $hourlyStatus[$i]['score30'] === 7 ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900 dark:text-emerald-400' : ($hourlyStatus[$i]['score30'] !== null ? 'bg-rose-100 text-rose-700 dark:bg-rose-900 dark:text-rose-400' : 'bg-gray-100 text-gray-500 dark:bg-gray-700 dark:text-gray-400') }}">
-                                                {{ $hourlyStatus[$i]['score30'] ?? '-' }}
-                                            </span>
-                                        </td>
-                                    @endfor
-                                </tr>
-                            </tbody>
-                        </table>
-                    </div>
-                </x-filament::section>
-            </div>
-
-            {{-- Ringkasan Akurasi (Chart) - Tampilan Bersampingan --}}
-            <div class="lg:col-span-5">
-                <x-filament::section icon="heroicon-m-chart-pie" header="Ringkasan Akurasi" class="h-full flex flex-col">
-                    <div class="flex-1 flex flex-col sm:flex-row items-center justify-between p-6 bg-gray-50 dark:bg-gray-900 rounded-lg gap-8">
-                        
-                        <!-- Kiri: Area Chart -->
-                        <div class="relative w-40 h-40 flex-shrink-0">
-                            <canvas id="accuracyChart"></canvas>
-                            <div class="absolute inset-0 flex items-center justify-center flex-col pointer-events-none">
-                                <span class="text-3xl font-extrabold tracking-tighter">{{ $summary['accuracy'] }}%</span>
-                                <span class="text-[9px] font-bold text-gray-500 dark:text-gray-400 uppercase tracking-widest mt-1">Akurasi</span>
-                            </div>
-                        </div>
-                        
-                        <!-- Kanan: Kotak Statistik -->
-                        <div class="w-full flex-1 flex flex-col gap-4">
-                            <div class="bg-white dark:bg-gray-800 p-4 rounded-lg border border-gray-200 dark:border-gray-700 flex items-center justify-between">
-                                <div class="flex items-center gap-2">
-                                    <div class="w-2.5 h-2.5 rounded-full bg-emerald-500"></div>
-                                    <div class="text-sm font-bold text-gray-500 dark:text-gray-300 uppercase tracking-wider">Tepat</div>
-                                </div>
-                                <div class="text-2xl font-black text-emerald-600 dark:text-emerald-400">{{ $summary['passed'] }}</div>
-                            </div>
-                            
-                            <div class="bg-white dark:bg-gray-800 p-4 rounded-lg border border-gray-200 dark:border-gray-700 flex items-center justify-between">
-                                <div class="flex items-center gap-2">
-                                    <div class="w-2.5 h-2.5 rounded-full bg-rose-500"></div>
-                                    <div class="text-sm font-bold text-gray-500 dark:text-gray-300 uppercase tracking-wider">Meleset</div>
-                                </div>
-                                <div class="text-2xl font-black text-rose-600 dark:text-rose-400">{{ $summary['failed'] }}</div>
-                            </div>
-                        </div>
-                        
-                    </div>
-                </x-filament::section>
-            </div>
+                            @endforeach
+                        </tbody>
+                    </table>
+                </div>
+            </x-filament::section>
         </div>
     </div>
 
     <script>
         document.addEventListener('livewire:initialized', () => {
             const initChart = () => {
-                const ctx = document.getElementById('accuracyChart');
+                const ctx = document.getElementById('parameterChart');
                 if(ctx) {
                     if(window.tafChart) { window.tafChart.destroy(); }
+                    
+                    const paramStats = @json($summary['paramStats'] ?? []);
+                    const labels = [];
+                    const data = [];
+                    
+                    // Warna sesuai referensi bar chart pada gambar (biru, hijau, kuning, ungu, tosca, merah, nila)
+                    const colors = ['#3b82f6', '#10b981', '#f59e0b', '#8b5cf6', '#06b6d4', '#f43f5e', '#6366f1'];
+
+                    Object.values(paramStats).forEach(stat => {
+                        labels.push(stat.label);
+                        const percentage = stat.total > 0 ? (stat.pass / stat.total * 100) : 0;
+                        data.push(percentage.toFixed(1));
+                    });
+
                     window.tafChart = new Chart(ctx, {
-                        type: 'doughnut',
+                        type: 'bar',
                         data: {
-                            labels: ['Tepat', 'Meleset'],
+                            labels: labels,
                             datasets: [{
-                                data: [{{ $summary['passed'] }}, {{ $summary['failed'] }}],
-                                backgroundColor: ['#10b981', '#f43f5e'],
-                                hoverBackgroundColor: ['#059669', '#e11d48'],
-                                borderWidth: 0,
-                                cutout: '75%',
+                                data: data,
+                                backgroundColor: colors,
                                 borderRadius: 4,
+                                barPercentage: 0.6
                             }]
                         },
                         options: {
                             responsive: true,
                             maintainAspectRatio: false,
-                            animation: { animateScale: true, animateRotate: true },
-                            plugins: { 
-                                legend: { display: false }, 
-                                tooltip: { 
-                                    enabled: true,
-                                    backgroundColor: 'rgba(0, 0, 0, 0.8)',
-                                    padding: 12,
-                                    titleFont: { size: 14, family: 'sans-serif' },
-                                    bodyFont: { size: 14, weight: 'bold' },
-                                    displayColors: true,
-                                    cornerRadius: 8,
-                                } 
+                            scales: {
+                                y: {
+                                    beginAtZero: true,
+                                    max: 100,
+                                    ticks: {
+                                        callback: function(value) { return value + '%' }
+                                    }
+                                }
+                            },
+                            plugins: {
+                                legend: { display: false },
+                                tooltip: {
+                                    callbacks: {
+                                        label: function(context) {
+                                            return context.parsed.y + '% Akurat';
+                                        }
+                                    }
+                                },
+                                // Plugin untuk menampilkan persentase di atas bar
+                                datalabels: {
+                                    anchor: 'end',
+                                    align: 'top',
+                                    formatter: function(value) {
+                                        return value + '%';
+                                    },
+                                    font: {
+                                        weight: 'bold'
+                                    }
+                                }
                             }
                         }
                     });
