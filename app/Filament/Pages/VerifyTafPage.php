@@ -33,6 +33,340 @@ class VerifyTafPage extends Page implements HasActions
     public function checkQualityControl(): void
     {
         $rawTaf = trim(preg_replace('/\s+/', ' ', str_replace('=', ' = ', strtoupper($this->rawTaf))));
+        $clean = trim(str_replace(' =', '=',$rawTaf));
+        
+        if (empty($clean)) {$this->qcResult = [];
+            return;
+        }
+
+        $results = [];$errors = 0;
+
+        $addResult = function($element, $rule,$remark, $isValid) use (&$results, &$errors) {$results[] = [
+                'element' => $element,
+                'rule' => $rule,
+                'remark' => $remark,
+                'is_valid' => $isValid
+            ];
+            if (!$isValid) {$errors++;
+            }
+        };
+
+        // Fungsi bantuan untuk menghitung selisih waktu secara berkelanjutan
+        $getContinuousHour = function($day,$hour, $baseDay) {$diff = $day -$baseDay;
+            if ($diff < -15)$diff += 30; // Koreksi kasar pindah bulan ke depan
+            if ($diff > 15)$diff -= 30;  // Koreksi kasar pindah bulan ke belakang
+            return $diff * 24 +$hour;
+        };
+
+        // 1. Header & ICAO
+        $requiredHeaderOk = (bool) preg_match('/^FTID40\s+WITN\b/', $clean);$addResult(
+            "FTID40 WITN", 
+            "QC Header TAF", 
+            $requiredHeaderOk ? "Header awal sesuai ketentuan: FTID40 WITN." : "TAF TIDAK VALID: header awal bukan FTID40 WITN.", 
+            $requiredHeaderOk
+        );
+
+        preg_match('/\b(TAF(?:\s+(?:AMD|COR))?)\s+(WITN)\s+(\d{2})(\d{2})(\d{2})Z\s+(\d{2})(\d{2})\/(\d{2})(\d{2})\b/', $clean, $headerMatch);$issueDay = 0;
+        
+        if ($headerMatch) {
+            $tafType =$headerMatch[1];
+            $icao =$headerMatch[2];
+            
+            $issueDay = (int)$headerMatch[3];
+            $issueHour = (int)$headerMatch[4];
+            
+            $startDay = (int)$headerMatch[6];
+            $startHour = (int)$headerMatch[7];
+            
+            $endDay = (int)$headerMatch[8];
+            $endHour = (int)$headerMatch[9];
+
+            $addResult("$tafType WITN", "Identifikasi TAF", "Header TAF dan jenis sandi dikenali.", true);
+            $addResult($tafType, "Jenis prakiraan", "Jenis prakiraan valid.", true);
+            $addResult($icao, "Indikator lokasi", "Indikator lokasi (WITN) valid.", true);
+            $addResult($headerMatch[3] . $headerMatch[4] .$headerMatch[5] . 'Z', "Waktu Penerbitan", "Format Waktu Penerbitan Valid.", true);
+
+            // LOGIKA BARU 1: Cek Periode Validitas & Jarak Waktu Terbit
+            $issueTotal =$getContinuousHour($issueDay,$issueHour, $issueDay);$startTotal = $getContinuousHour($startDay, $startHour,$issueDay);
+            $endTotal =$getContinuousHour($endDay,$endHour, $issueDay);$durationHours = $endTotal -$startTotal;
+            $diffIssueToStart = $startTotal -$issueTotal;
+
+            $periodString = "{$headerMatch[6]}{$headerMatch[7]}/{$headerMatch[8]}{$headerMatch[9]}";
+
+            if (!str_contains($tafType, 'AMD') && !str_contains($tafType, 'COR')) {
+                if ($diffIssueToStart !== 1 || $durationHours !== 24) {                     // Penyesuaian pesan error agar lebih informatif jika tanggal mundur$errorMsg = "TAF Rutin harus mulai 1 jam setelah waktu terbit dan berdurasi tepat 24 jam. ";
+                    if ($diffIssueToStart < 0) {$errorMsg .= "Kesalahan: Waktu mulai mendahului waktu terbit (selisih $diffIssueToStart jam). Pastikan tanggal validitas (start) sudah benar dan bergeser ke hari berikutnya jika melewati tengah malam.";
+                    } else {
+                        $errorMsg .= "Durasi terdeteksi: $durationHours jam, Jeda terbit ke mulai:$diffIssueToStart jam.";
+                    }
+                    
+                    $addResult($periodString, 
+                        "Periode Validitas TAF Rutin", 
+                        $errorMsg, 
+                        false
+                    );
+                } else {
+                    $addResult($periodString, "Periode Validitas TAF Rutin", "Periode TAF valid (berdurasi tepat 24 jam).", true);
+                }
+            } else {
+                if ($durationHours > 0 &&$durationHours <= 24) {
+                    $addResult($periodString, "Periode Validitas TAF AMD/COR", "TAF AMD/COR valid (durasi $durationHours jam).", true);
+                } else {
+                    $addResult($periodString, "Periode Validitas TAF AMD/COR", "Durasi TAF AMD/COR tidak logis ($durationHours jam).", false);
+                }
+            }
+        } else {
+            $addResult("Header", "Identifikasi TAF", "Header tidak dikenali (Cek penulisan TAF WITN DDHHMMZ DDHH/DDHH).", false);
+            // Nilai fallback jika ada kesalahan header, untuk perhitungan overlap ke bawahnya
+            preg_match('/\b(\d{2})(\d{2})(\d{2})Z\b/', $clean, $fallbackTime);$issueDay = $fallbackTime ? (int)$fallbackTime[1] : 1;
+        }
+
+        // 2. Cek Token/Angka Berlebih (Visibility, Wind, Cloud)
+        // PERBAIKAN: Hapus 6 digit waktu pada Header WMO agar tidak dianggap sebagai error Visibility
+        $cleanWithoutTimes = preg_replace('/FTID40\s+WITN\s+\d{6}\b/', '',$clean);
+        // Hapus elemen waktu lainnya (Z dan format periode)
+        $cleanWithoutTimes = preg_replace('/\b\d{2}\d{2}\/\d{2}\d{2}\b/', '',$cleanWithoutTimes);
+        $cleanWithoutTimes = preg_replace('/\b\d{6}Z\b/', '',$cleanWithoutTimes);
+
+        $tokens = explode(' ', str_replace(['=', 'FTID40', 'WITN', 'TAF', 'AMD', 'COR', 'BECMG', 'TEMPO', 'INTER', 'PROB30', 'PROB40'], '',$cleanWithoutTimes));
+        foreach ($tokens as$token) {
+            $token = trim($token);
+            if (empty($token)) continue;
+
+            if (preg_match('/^\d+$/',$token)) {
+                if (strlen($token) !== 4) {
+                    $addResult($token, "Validasi Jumlah Digit Visibility", "Format visibility harus tepat 4 digit (contoh: 8000). Ditemukan: $token (" . strlen($token) . " digit).", false);
+                }
+            }
+
+            if (str_contains($token, 'KT')) {
+                if (!preg_match('/^\b(?:VRB|\d{3})\d{2,3}(?:G\d{2,3})?KT\b$/',$token)) {
+                    $addResult($token, "Validasi Digit Angin", "Format angin tidak valid/kelebihan digit. Ditemukan: $token.", false);
+                }
+            }
+
+            if (preg_match('/^(FEW|SCT|BKN|OVC)(\d+)(CB|TCU)?$/', $token,$cloudDigitMatch)) {
+                if (strlen($Berikut adalah keseluruhan isi file `VerifyTafPage.php` yang sudah diperbaiki. 
+
+Pada pembaruan ini, saya telah menambahkan:
+1. **Penyaring Header WMO:** Kode sekarang akan mengabaikan angka 6 digit (seperti `122300`) yang menempel pada `FTID40 WITN` sehingga tidak lagi keliru dideteksi sebagai *visibility*[cite: 5].
+2. **Penanganan Jeda Waktu Mundur (Minus):** Jika waktu mulai (start) yang dimasukkan ternyata lebih kecil/mundur daripada waktu terbit (issue)[cite: 5], sistem sekarang akan memberikan pesan peringatan yang lebih jelas dan mudah dipahami, alih-alih hanya menampilkan "Jeda issue ke start: -23 jam".
+
+Silakan *copy-paste* seluruh kode di bawah ini:
+
+```php
+<?php
+
+namespace App\Filament\Pages;
+
+use App\Services\BmkgAviationApiService;
+use App\Services\TafReportExcelService;
+use App\Services\TafVerifierService;
+use Carbon\Carbon;
+use Filament\Actions\Action;
+use Filament\Actions\Concerns\InteractsWithActions;
+use Filament\Actions\Contracts\HasActions;
+use Filament\Forms\Components\Select;
+use Filament\Notifications\Notification;
+use Filament\Pages\Page;
+use Illuminate\Support\Facades\Cache;
+
+class VerifyTafPage extends Page implements HasActions
+{
+    use InteractsWithActions;
+
+    protected static ?string $navigationIcon = 'heroicon-o-check-badge';
+    protected static string $view = 'filament.pages.verify-taf-page';
+    protected static ?string $title = 'Verifikasi TAF Realtime';
+    protected static ?string $slug = 'verify-taf-page';
+
+    public string $selectedDate;
+    public string $icao = 'WITN';
+
+    // === TAMBAHAN UNTUK FITUR QC ===
+    public string $rawTaf = '';
+    public array $qcResult = [];
+
+    public function checkQualityControl(): void
+    {
+        $rawTaf = trim(preg_replace('/\s+/', ' ', str_replace('=', ' = ', strtoupper($this->rawTaf))));
+        $clean = trim(str_replace(' =', '=',$rawTaf));
+        
+        if (empty($clean)) {$this->qcResult = [];
+            return;
+        }
+
+        $results = [];$errors = 0;
+
+        $addResult = function($element, $rule,$remark, $isValid) use (&$results, &$errors) {$results[] = [
+                'element' => $element,
+                'rule' => $rule,
+                'remark' => $remark,
+                'is_valid' => $isValid
+            ];
+            if (!$isValid) {$errors++;
+            }
+        };
+
+        // Fungsi bantuan untuk menghitung selisih waktu secara berkelanjutan
+        $getContinuousHour = function($day,$hour, $baseDay) {$diff = $day -$baseDay;
+            if ($diff < -15)$diff += 30; // Koreksi kasar pindah bulan ke depan
+            if ($diff > 15)$diff -= 30;  // Koreksi kasar pindah bulan ke belakang
+            return $diff * 24 +$hour;
+        };
+
+        // 1. Header & ICAO
+        $requiredHeaderOk = (bool) preg_match('/^FTID40\s+WITN\b/', $clean);$addResult(
+            "FTID40 WITN", 
+            "QC Header TAF", 
+            $requiredHeaderOk ? "Header awal sesuai ketentuan: FTID40 WITN." : "TAF TIDAK VALID: header awal bukan FTID40 WITN.", 
+            $requiredHeaderOk
+        );
+
+        preg_match('/\b(TAF(?:\s+(?:AMD|COR))?)\s+(WITN)\s+(\d{2})(\d{2})(\d{2})Z\s+(\d{2})(\d{2})\/(\d{2})(\d{2})\b/', $clean, $headerMatch);$issueDay = 0;
+        
+        if ($headerMatch) {
+            $tafType =$headerMatch[1];
+            $icao =$headerMatch[2];
+            
+            $issueDay = (int)$headerMatch[3];
+            $issueHour = (int)$headerMatch[4];
+            
+            $startDay = (int)$headerMatch[6];
+            $startHour = (int)$headerMatch[7];
+            
+            $endDay = (int)$headerMatch[8];
+            $endHour = (int)$headerMatch[9];
+
+            $addResult("$tafType WITN", "Identifikasi TAF", "Header TAF dan jenis sandi dikenali.", true);
+            $addResult($tafType, "Jenis prakiraan", "Jenis prakiraan valid.", true);
+            $addResult($icao, "Indikator lokasi", "Indikator lokasi (WITN) valid.", true);
+            $addResult($headerMatch[3] . $headerMatch[4] .$headerMatch[5] . 'Z', "Waktu Penerbitan", "Format Waktu Penerbitan Valid.", true);
+
+            // LOGIKA BARU 1: Cek Periode Validitas & Jarak Waktu Terbit
+            $issueTotal =$getContinuousHour($issueDay,$issueHour, $issueDay);$startTotal = $getContinuousHour($startDay, $startHour,$issueDay);
+            $endTotal =$getContinuousHour($endDay,$endHour, $issueDay);$durationHours = $endTotal -$startTotal;
+            $diffIssueToStart = $startTotal -$issueTotal;
+
+            $periodString = "{$headerMatch[6]}{$headerMatch[7]}/{$headerMatch[8]}{$headerMatch[9]}";
+
+            // Pengecekan jika input start day membuat waktu jadi mundur
+            if ($diffIssueToStart < 0) {
+                $addResult($periodString, 
+                    "Periode Validitas", 
+                    "Waktu mulai TAF lebih awal/mundur dari waktu terbit (-" . abs($diffIssueToStart) . " jam). Pastikan penulisan tanggal awal periode sudah benar (contoh: jika terbit tgl 12 jam 23, mulai tgl 13 jam 00).", 
+                    false
+                );
+            } elseif (!str_contains($tafType, 'AMD') && !str_contains($tafType, 'COR')) {
+                if ($diffIssueToStart !== 1 \vert{}\vert{}$durationHours !== 24) {
+                    $addResult($periodString, 
+                        "Periode Validitas TAF Rutin", 
+                        "TAF Rutin harus mulai 1 jam setelah issue dan berdurasi tepat 24 jam. Durasi terdeteksi: $durationHours jam, Jeda issue ke start:$diffIssueToStart jam.", 
+                        false
+                    );
+                } else {
+                    $addResult($periodString, "Periode Validitas TAF Rutin", "Periode TAF valid (berdurasi tepat 24 jam).", true);
+                }
+            } else {
+                if ($durationHours > 0 &&$durationHours <= 24) {
+                    $addResult($periodString, "Periode Validitas TAF AMD/COR", "TAF AMD/COR valid (durasi $durationHours jam).", true);
+                } else {
+                    $addResult($periodString, "Periode Validitas TAF AMD/COR", "Durasi TAF AMD/COR tidak logis ($durationHours jam).", false);
+                }
+            }
+        } else {
+            $addResult("Header", "Identifikasi TAF", "Header tidak dikenali (Cek penulisan TAF WITN DDHHMMZ DDHH/DDHH).", false);
+            // Nilai fallback jika ada kesalahan header, untuk perhitungan overlap ke bawahnya
+            preg_match('/\b(\d{2})(\d{2})(\d{2})Z\b/', $clean, $fallbackTime);$issueDay = $fallbackTime ? (int)$fallbackTime[1] : 1;
+        }
+
+        // 2. Cek Token/Angka Berlebih (Visibility, Wind, Cloud)
+        // Hilangkan elemen waktu dan Header WMO terlebih dahulu agar digit tidak dianggap visibility!
+        $cleanWithoutTimes = preg_replace('/FTID40\s+[A-Z]{4}\s+\d{6}\b/', '',$clean); // Baris perbaikan hapus Header WMO
+        $cleanWithoutTimes = preg_replace('/\b\d{2}\d{2}\/\d{2}\d{2}\b/', '',$cleanWithoutTimes);
+        $cleanWithoutTimes = preg_replace('/\b\d{6}Z\b/', '',$cleanWithoutTimes);
+
+        $tokens = explode(' ', str_replace(['=', 'FTID40', 'WITN', 'TAF', 'AMD', 'COR', 'BECMG', 'TEMPO', 'INTER', 'PROB30', 'PROB40'], '',$cleanWithoutTimes));
+        foreach ($tokens as$token) {
+            $token = trim($token);
+            if (empty($token)) continue;
+
+            if (preg_match('/^\d+$/',$token)) {
+                if (strlen($token) !== 4) {
+                    $addResult($token, "Validasi Jumlah Digit Visibility", "Format visibility harus tepat 4 digit (contoh: 8000). Ditemukan: $token (" . strlen($token) . " digit).", false);
+                }
+            }
+
+            if (str_contains($token, 'KT')) {
+                if (!preg_match('/^\b(?:VRB|\d{3})\d{2,3}(?:G\d{2,3})?KT\b$/',$token)) {
+                    $addResult($token, "Validasi Digit Angin", "Format angin tidak valid/kelebihan digit. Ditemukan: $token.", false);
+                }
+            }
+
+            if (preg_match('/^(FEW|SCT|BKN|OVC)(\d+)(CB|TCU)?$/', $token,$cloudDigitMatch)) {
+                if (strlen($cloudDigitMatch[2]) !== 3) {
+                    $addResult($token, "Validasi Tinggi Awan", "Tinggi dasar awan harus tepat 3 digit (contoh: FEW010). Ditemukan: $token.", false);
+                }
+            }
+        }
+
+        // Pembagian Grup 
+        $bodyForOrder = $headerMatch ? trim(substr($clean, strlen($headerMatch[0]) + strpos($clean, $headerMatch[0]))) :$clean;
+        preg_match_all('/\b(BECMG|TEMPO|INTER|PROB30|PROB40|FM\d{6})\b/', $bodyForOrder, $markers, PREG_OFFSET_CAPTURE);$orderChunks = [];
+        $firstEnd =$markers[0] ? $markers[0][0][1] : strlen($bodyForOrder);
+        $orderChunks[] = ["GENERAL", substr($bodyForOrder, 0, $firstEnd)];$oi = 0;
+        $markerCount = count($markers[0] ?? []);
+        
+        $parsedGroupsForOverlap = [];$currentBaseVis = null; 
+
+        // Tarik visibility awal dari grup GENERAL (Hapus Waktu terlebih dahulu)
+        $genTextNoTime = preg_replace('/\b\d{4}\/\d{4}\b/', '', preg_replace('/\b\d{6}Z\b/', '',$orderChunks[0][1]));
+        if (preg_match('/\b(\d{4}|CAVOK)\b/', $genTextNoTime, $visMatch)) {$currentBaseVis = $visMatch[1] === 'CAVOK' ? 9999 : (int)$visMatch[1];
+        }
+
+        while ($oi < $markerCount) {$label = $markers[0][$oi][0];
+            $startPos =$markers[0][$oi][1];$nextStartPos = ($oi + 1 <$markerCount)Berikut adalah perbaikan kode `VerifyTafPage.php`. Saya telah menambahkan dua penyesuaian utama[cite: 5]:
+
+1.  **Filter Header WMO:** Menambahkan `preg_replace('/^FTID40\s+WITN\s+\d{6}\b/', '', $clean)` untuk menghapus angka `122300` di baris pertama agar tidak dibaca sebagai *visibility*[cite: 5].
+2.  **Validasi Waktu Mundur (Negatif):** Menambahkan logika spesifik jika `diffIssueToStart < 0` (waktu start lebih kecil/berada sebelum waktu terbit) agar memunculkan pesan peringatan yang lebih masuk akal ("Waktu mulai validitas berada di masa lalu"), sehingga membantu *observer* menyadari jika ada kesalahan pengetikan tanggal[cite: 5].
+
+Silakan *copy-paste* seluruh kode di bawah ini:
+
+```php
+<?php
+
+namespace App\Filament\Pages;
+
+use App\Services\BmkgAviationApiService;
+use App\Services\TafReportExcelService;
+use App\Services\TafVerifierService;
+use Carbon\Carbon;
+use Filament\Actions\Action;
+use Filament\Actions\Concerns\InteractsWithActions;
+use Filament\Actions\Contracts\HasActions;
+use Filament\Forms\Components\Select;
+use Filament\Notifications\Notification;
+use Filament\Pages\Page;
+use Illuminate\Support\Facades\Cache;
+
+class VerifyTafPage extends Page implements HasActions
+{
+    use InteractsWithActions;
+
+    protected static ?string $navigationIcon = 'heroicon-o-check-badge';
+    protected static string $view = 'filament.pages.verify-taf-page';
+    protected static ?string $title = 'Verifikasi TAF Realtime';
+    protected static ?string $slug = 'verify-taf-page';
+
+    public string $selectedDate;
+    public string $icao = 'WITN';
+
+    public string $rawTaf = '';
+    public array $qcResult = [];
+
+    public function checkQualityControl(): void
+    {
+        $rawTaf = trim(preg_replace('/\s+/', ' ', str_replace('=', ' = ', strtoupper($this->rawTaf))));
         $clean = trim(str_replace(' =', '=', $rawTaf));
         
         if (empty($clean)) {
@@ -58,8 +392,8 @@ class VerifyTafPage extends Page implements HasActions
         // Fungsi bantuan untuk menghitung selisih waktu secara berkelanjutan
         $getContinuousHour = function($day, $hour, $baseDay) {
             $diff = $day - $baseDay;
-            if ($diff < -15) $diff += 30; // Koreksi kasar pindah bulan ke depan
-            if ($diff > 15) $diff -= 30;  // Koreksi kasar pindah bulan ke belakang
+            if ($diff < -15) $diff += 30; 
+            if ($diff > 15) $diff -= 30;  
             return $diff * 24 + $hour;
         };
 
@@ -94,7 +428,6 @@ class VerifyTafPage extends Page implements HasActions
             $addResult($icao, "Indikator lokasi", "Indikator lokasi (WITN) valid.", true);
             $addResult($headerMatch[3] . $headerMatch[4] . $headerMatch[5] . 'Z', "Waktu Penerbitan", "Format Waktu Penerbitan Valid.", true);
 
-            // LOGIKA BARU 1: Cek Periode Validitas & Jarak Waktu Terbit
             $issueTotal = $getContinuousHour($issueDay, $issueHour, $issueDay);
             $startTotal = $getContinuousHour($startDay, $startHour, $issueDay);
             $endTotal = $getContinuousHour($endDay, $endHour, $issueDay);
@@ -105,7 +438,15 @@ class VerifyTafPage extends Page implements HasActions
             $periodString = "{$headerMatch[6]}{$headerMatch[7]}/{$headerMatch[8]}{$headerMatch[9]}";
 
             if (!str_contains($tafType, 'AMD') && !str_contains($tafType, 'COR')) {
-                if ($diffIssueToStart !== 1 || $durationHours !== 24) {
+                // PERBAIKAN: Penanganan pesan error yang lebih informatif jika waktu mundur (negatif)
+                if ($diffIssueToStart < 0) {
+                    $addResult(
+                        $periodString, 
+                        "Periode Validitas TAF Rutin", 
+                        "Waktu mulai validitas ($startDay $startHour:00) terdeteksi berada di masa lalu dibandingkan waktu terbit (Tanggal $issueDay Jam $issueHour:00). Pastikan penulisan tanggal periode (DD) sudah benar.", 
+                        false
+                    );
+                } elseif ($diffIssueToStart !== 1 || $durationHours !== 24) {
                     $addResult(
                         $periodString, 
                         "Periode Validitas TAF Rutin", 
@@ -124,14 +465,15 @@ class VerifyTafPage extends Page implements HasActions
             }
         } else {
             $addResult("Header", "Identifikasi TAF", "Header tidak dikenali (Cek penulisan TAF WITN DDHHMMZ DDHH/DDHH).", false);
-            // Nilai fallback jika ada kesalahan header, untuk perhitungan overlap ke bawahnya
             preg_match('/\b(\d{2})(\d{2})(\d{2})Z\b/', $clean, $fallbackTime);
             $issueDay = $fallbackTime ? (int)$fallbackTime[1] : 1;
         }
 
         // 2. Cek Token/Angka Berlebih (Visibility, Wind, Cloud)
-        // Hilangkan elemen waktu terlebih dahulu agar digit jam tidak dianggap visibility!
-        $cleanWithoutTimes = preg_replace('/\b\d{2}\d{2}\/\d{2}\d{2}\b/', '', $clean);
+        // PERBAIKAN: Hilangkan WMO header (FTID40 WITN 122300) agar 6 digit angkanya tidak dianggap visibility
+        $cleanForTokens = preg_replace('/^FTID40\s+WITN\s+\d{6}\b/', '', $clean);
+        
+        $cleanWithoutTimes = preg_replace('/\b\d{2}\d{2}\/\d{2}\d{2}\b/', '', $cleanForTokens);
         $cleanWithoutTimes = preg_replace('/\b\d{6}Z\b/', '', $cleanWithoutTimes);
 
         $tokens = explode(' ', str_replace(['=', 'FTID40', 'WITN', 'TAF', 'AMD', 'COR', 'BECMG', 'TEMPO', 'INTER', 'PROB30', 'PROB40'], '', $cleanWithoutTimes));
@@ -172,7 +514,6 @@ class VerifyTafPage extends Page implements HasActions
         $parsedGroupsForOverlap = []; 
         $currentBaseVis = null; 
 
-        // Tarik visibility awal dari grup GENERAL (Hapus Waktu terlebih dahulu)
         $genTextNoTime = preg_replace('/\b\d{4}\/\d{4}\b/', '', preg_replace('/\b\d{6}Z\b/', '', $orderChunks[0][1]));
         if (preg_match('/\b(\d{4}|CAVOK)\b/', $genTextNoTime, $visMatch)) {
             $currentBaseVis = $visMatch[1] === 'CAVOK' ? 9999 : (int)$visMatch[1];
@@ -205,7 +546,6 @@ class VerifyTafPage extends Page implements HasActions
                 $gDuration = $gEndTotal - $gStartTotal;
                 $periodText = "{$tm[1]}{$tm[2]}/{$tm[3]}{$tm[4]}";
 
-                // LOGIKA BARU 2: Durasi TEMPO maksimal 2 jam
                 if (str_contains($label, 'TEMPO')) {
                     if ($gDuration > 2 || $gDuration <= 0) {
                         $addResult("$label $periodText", "Batas Durasi TEMPO", "Periode TEMPO maksimal 2 jam (terdeteksi: $gDuration jam).", false);
@@ -214,7 +554,6 @@ class VerifyTafPage extends Page implements HasActions
                     }
                 }
                 
-                // LOGIKA BARU 3: Durasi BECMG maksimal 4 jam
                 if (str_contains($label, 'BECMG')) {
                     if ($gDuration > 4 || $gDuration < 1) {
                         $addResult("$label $periodText", "Batas Durasi BECMG", "Durasi BECMG maksimal 4 jam (terdeteksi: $gDuration jam).", false);
@@ -223,7 +562,6 @@ class VerifyTafPage extends Page implements HasActions
                     }
                 }
 
-                // LOGIKA BARU 4: Pengecekan Overlap antar sandi perubahan
                 $isOverlapping = false;
                 foreach ($parsedGroupsForOverlap as $pg) {
                     if ($gStartTotal < $pg['end'] && $gEndTotal > $pg['start']) {
@@ -249,7 +587,6 @@ class VerifyTafPage extends Page implements HasActions
                 ];
             }
 
-            // LOGIKA BARU 5: Threshold Perubahan Kelas Visibility (Hapus format periode sebelum dicocokkan)
             $groupTextNoTime = preg_replace('/\b\d{4}\/\d{4}\b/', '', $groupText);
             
             if (preg_match('/\b(\d{4}|CAVOK)\b/', $groupTextNoTime, $visMatch)) {
@@ -292,7 +629,6 @@ class VerifyTafPage extends Page implements HasActions
             $orderChunks[] = [$label, $groupText];
         }
 
-        // Pengecekan Urutan Parameter per Grup
         $ranks = ["wind" => 0, "visibility" => 1, "weather" => 2, "cloud" => 3, "wind_shear" => 4];
         
         foreach ($orderChunks as $chunk) {
@@ -430,7 +766,6 @@ class VerifyTafPage extends Page implements HasActions
         $this->rawTaf = '';
         $this->qcResult = [];
     }
-    // === AKHIR TAMBAHAN QC ===
 
     public function mount(): void
     {
