@@ -156,6 +156,69 @@
             $activeMetarRaw = $latestRow['metar_raw'] ?? 'Data tidak tersedia';
         @endphp
 
+        {{-- CARD METRIK MONITORING KINERJA VERIFIKASI TAF --}}
+        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+            <x-filament::section class="bg-white dark:bg-gray-900 border-l-4 border-l-primary-500 shadow-sm">
+                <div class="flex items-center justify-between">
+                    <div>
+                        <p class="text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-gray-400">Total Slot Evaluasi</p>
+                        <h3 class="text-2xl font-black text-gray-900 dark:text-white mt-1">{{ $summary['total'] ?? 0 }}</h3>
+                        <p class="text-[11px] text-gray-400 mt-0.5">Slot terverifikasi hari ini</p>
+                    </div>
+                    <div class="p-3 rounded-xl bg-primary-500/10 text-primary-500">
+                        <div style="width: 24px; height: 24px;">
+                            <x-heroicon-m-clock />
+                        </div>
+                    </div>
+                </div>
+            </x-filament::section>
+
+            <x-filament::section class="bg-white dark:bg-gray-900 border-l-4 border-l-emerald-500 shadow-sm">
+                <div class="flex items-center justify-between">
+                    <div>
+                        <p class="text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-gray-400">Sesuai (Passed)</p>
+                        <h3 class="text-2xl font-black text-emerald-600 dark:text-emerald-400 mt-1">{{ $summary['passed'] ?? 0 }}</h3>
+                        <p class="text-[11px] text-emerald-500/80 mt-0.5">Memenuhi skor kelulusan</p>
+                    </div>
+                    <div class="p-3 rounded-xl bg-emerald-500/10 text-emerald-500">
+                        <div style="width: 24px; height: 24px;">
+                            <x-heroicon-m-check-circle />
+                        </div>
+                    </div>
+                </div>
+            </x-filament::section>
+
+            <x-filament::section class="bg-white dark:bg-gray-900 border-l-4 border-l-rose-500 shadow-sm">
+                <div class="flex items-center justify-between">
+                    <div>
+                        <p class="text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-gray-400">Gagal (Failed)</p>
+                        <h3 class="text-2xl font-black text-rose-600 dark:text-rose-400 mt-1">{{ $summary['failed'] ?? 0 }}</h3>
+                        <p class="text-[11px] text-rose-500/80 mt-0.5">Tidak memenuhi kriteria</p>
+                    </div>
+                    <div class="p-3 rounded-xl bg-rose-500/10 text-rose-500">
+                        <div style="width: 24px; height: 24px;">
+                            <x-heroicon-m-x-circle />
+                        </div>
+                    </div>
+                </div>
+            </x-filament::section>
+
+            <x-filament::section class="bg-white dark:bg-gray-900 border-l-4 border-l-amber-500 shadow-sm">
+                <div class="flex items-center justify-between">
+                    <div>
+                        <p class="text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-gray-400">Akurasi Harian</p>
+                        <h3 class="text-2xl font-black text-amber-600 dark:text-amber-400 mt-1">{{ $summary['accuracy'] ?? 0 }}%</h3>
+                        <p class="text-[11px] text-amber-500/80 mt-0.5">Capaian persentase harian</p>
+                    </div>
+                    <div class="p-3 rounded-xl bg-amber-500/10 text-amber-500">
+                        <div style="width: 24px; height: 24px;">
+                            <x-heroicon-m-trophy />
+                        </div>
+                    </div>
+                </div>
+            </x-filament::section>
+        </div>
+
         <div class="grid grid-cols-1 gap-6 items-start">
             
             {{-- BAR CHART PERSENTASE VERIFIKASI PARAMETER CUACA --}}
