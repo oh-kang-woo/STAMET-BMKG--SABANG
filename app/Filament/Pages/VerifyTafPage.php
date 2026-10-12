@@ -64,27 +64,87 @@ class VerifyTafPage extends Page implements HasActions
             $requiredHeaderOk
         );
 
-        preg_match('/\b(TAF(?:\s+(?:AMD|COR))?)\s+(WITN)\s+(\d{6})Z\s+(\d{4})\/(\d{4})\b/', $clean, $headerMatch);
+        preg_match('/\b(TAF(?:\s+(?:AMD|COR))?)\s+(WITN)\s+(\d{2})(\d{2})(\d{2})Z\s+(\d{2})(\d{2})\/(\d{2})(\d{2})\b/', $clean, $headerMatch);
         
         if ($headerMatch) {
             $tafType = $headerMatch[1];
             $icao = $headerMatch[2];
-            $issue = $headerMatch[3] . 'Z';
-            $valid = $headerMatch[4] . '/' . $headerMatch[5];
+            
+            $issueDay = (int)$headerMatch[3];
+            $issueHour = (int)$headerMatch[4];
+            
+            $startDay = (int)$headerMatch[6];
+            $startHour = (int)$headerMatch[7];
+            
+            $endDay = (int)$headerMatch[8];
+            $endHour = (int)$headerMatch[9];
 
             $addResult("$tafType WITN", "Identifikasi TAF", "Header TAF dan jenis sandi dikenali.", $requiredHeaderOk);
             $addResult($tafType, "Jenis prakiraan", "Jenis prakiraan valid.", true);
             $addResult($icao, "Indikator lokasi", "Indikator lokasi (WITN) valid.", true);
+            $addResult($headerMatch[3] . $headerMatch[4] . $headerMatch[5] . 'Z', "Waktu Penerbitan", "Format Waktu Penerbitan Valid.", true);
+
+            // LOGIKA BARU 1: Cek Periode Validitas & Jarak Waktu Terbit
+            $startTotal = $startDay * 24 + $startHour;
+            $endTotal = $endDay * 24 + $endHour;
+            $issueTotal = $issueDay * 24 + $issueHour;
             
-            // Note: PHP Carbon logic for exact time validation based on the Python script would require full parsing.
-            // Simplified validation for issue and validity format based on regex for this scope.
-            $addResult($issue, "Waktu Penerbitan", "Format Waktu Penerbitan Valid.", true);
-            $addResult($valid, "Periode Validitas", "Format Validitas Valid.", true);
+            if ($endTotal < $startTotal) $endTotal += 30 * 24; // Koreksi kasar pindah bulan
+            $durationHours = $endTotal - $startTotal;
+
+            $diffIssueToStart = $startTotal - $issueTotal;
+            if ($diffIssueToStart < 0) $diffIssueToStart += 30 * 24; // Koreksi kasar pindah bulan
+
+            $periodString = "{$headerMatch[6]}{$headerMatch[7]}/{$headerMatch[8]}{$headerMatch[9]}";
+
+            if (!str_contains($tafType, 'AMD') && !str_contains($tafType, 'COR')) {
+                if ($diffIssueToStart !== 1 || $durationHours !== 24) {
+                    $addResult(
+                        $periodString, 
+                        "Periode Validitas TAF Rutin", 
+                        "TAF Rutin harus mulai 1 jam setelah issue dan berdurasi tepat 24 jam. Durasi terdeteksi: $durationHours jam, Jeda issue ke start: $diffIssueToStart jam.", 
+                        false
+                    );
+                } else {
+                    $addResult($periodString, "Periode Validitas TAF Rutin", "Periode TAF valid (berdurasi tepat 24 jam).", true);
+                }
+            } else {
+                if ($durationHours > 0 && $durationHours <= 24) {
+                    $addResult($periodString, "Periode Validitas TAF AMD/COR", "TAF AMD/COR valid (durasi $durationHours jam).", true);
+                } else {
+                    $addResult($periodString, "Periode Validitas TAF AMD/COR", "Durasi TAF AMD/COR tidak logis ($durationHours jam).", false);
+                }
+            }
         } else {
-            $addResult("Header", "Identifikasi TAF", "Header tidak dikenali sesuai format TAF WITN.", false);
+            $addResult("Header", "Identifikasi TAF", "Header tidak dikenali (Cek penulisan TAF WITN DDHHMMZ DDHH/DDHH).", false);
         }
 
-        // 2. Pembagian Grup (GENERAL, BECMG, TEMPO, dll)
+        // 2. Cek Token/Angka Berlebih (Visibility, Wind, Cloud)
+        $tokens = explode(' ', str_replace(['=', 'FTID40', 'WITN', 'TAF', 'AMD', 'COR', 'BECMG', 'TEMPO', 'INTER', 'PROB30', 'PROB40'], '', $clean));
+        foreach ($tokens as $token) {
+            $token = trim($token);
+            if (empty($token)) continue;
+
+            if (preg_match('/^\d+$/', $token)) {
+                if (strlen($token) !== 4) {
+                    $addResult($token, "Validasi Jumlah Digit Visibility", "Format visibility harus tepat 4 digit (contoh: 8000). Ditemukan: $token (" . strlen($token) . " digit).", false);
+                }
+            }
+
+            if (str_contains($token, 'KT')) {
+                if (!preg_match('/^\b(?:VRB|\d{3})\d{2,3}(?:G\d{2,3})?KT\b$/', $token)) {
+                    $addResult($token, "Validasi Digit Angin", "Format angin tidak valid/kelebihan digit. Ditemukan: $token.", false);
+                }
+            }
+
+            if (preg_match('/^(FEW|SCT|BKN|OVC)(\d+)(CB|TCU)?$/', $token, $cloudDigitMatch)) {
+                if (strlen($cloudDigitMatch[2]) !== 3) {
+                    $addResult($token, "Validasi Tinggi Awan", "Tinggi dasar awan harus tepat 3 digit (contoh: FEW010). Ditemukan: $token.", false);
+                }
+            }
+        }
+
+        // Pembagian Grup 
         $bodyForOrder = $headerMatch ? trim(substr($clean, strlen($headerMatch[0]) + strpos($clean, $headerMatch[0]))) : $clean;
         preg_match_all('/\b(BECMG|TEMPO|INTER|PROB30|PROB40|FM\d{6})\b/', $bodyForOrder, $markers, PREG_OFFSET_CAPTURE);
         
@@ -94,6 +154,15 @@ class VerifyTafPage extends Page implements HasActions
         
         $oi = 0;
         $markerCount = count($markers[0] ?? []);
+        
+        $parsedGroupsForOverlap = []; // Menyimpan rentang waktu tiap sandi
+        $currentBaseVis = null; // Menyimpan kelas awal visibilitas (keluhan 5)
+
+        // Tarik visibility awal dari grup GENERAL (sebagai acuan untuk klasifikasi BECMG/TEMPO)
+        if (preg_match('/\b(\d{4}|CAVOK)\b/', $orderChunks[0][1], $visMatch)) {
+            $currentBaseVis = $visMatch[1] === 'CAVOK' ? 9999 : (int)$visMatch[1];
+        }
+
         while ($oi < $markerCount) {
             $label = $markers[0][$oi][0];
             $startPos = $markers[0][$oi][1];
@@ -106,10 +175,112 @@ class VerifyTafPage extends Page implements HasActions
             } else {
                 $oi += 1;
             }
-            $orderChunks[] = [$label, substr($bodyForOrder, $startPos, $nextStartPos - $startPos)];
+            
+            $groupText = trim(substr($bodyForOrder, $startPos, $nextStartPos - $startPos));
+
+            // Ekstrak waktu dalam grup (untuk keluhan overlap dan batas jam)
+            if (preg_match('/\b(\d{2})(\d{2})\/(\d{2})(\d{2})\b/', $groupText, $tm)) {
+                $gStartDay = (int)$tm[1];
+                $gStartHour = (int)$tm[2];
+                $gEndDay = (int)$tm[3];
+                $gEndHour = (int)$tm[4];
+
+                $startTotal = $gStartDay * 24 + $gStartHour;
+                $endTotal = $gEndDay * 24 + $gEndHour;
+                if ($endTotal < $startTotal) $endTotal += 30 * 24;
+                
+                $gDuration = $endTotal - $startTotal;
+                $periodText = "{$tm[1]}{$tm[2]}/{$tm[3]}{$tm[4]}";
+
+                // LOGIKA BARU 2: Durasi TEMPO maksimal 2 jam
+                if (str_contains($label, 'TEMPO')) {
+                    if ($gDuration > 2 || $gDuration <= 0) {
+                        $addResult("$label $periodText", "Batas Durasi TEMPO", "Periode TEMPO melebihi batas maksimal 2 jam (terdeteksi: $gDuration jam).", false);
+                    } else {
+                        $addResult("$label $periodText", "Batas Durasi TEMPO", "Periode durasi valid.", true);
+                    }
+                }
+                
+                // LOGIKA BARU 3: Durasi BECMG maksimal 4 jam
+                if (str_contains($label, 'BECMG')) {
+                    if ($gDuration > 4 || $gDuration < 1) {
+                        $addResult("$label $periodText", "Batas Durasi BECMG", "Durasi BECMG harus antara 1-4 jam (terdeteksi: $gDuration jam).", false);
+                    } else {
+                        $addResult("$label $periodText", "Batas Durasi BECMG", "Periode durasi valid.", true);
+                    }
+                }
+
+                // LOGIKA BARU 4: Pengecekan Overlap antar sandi perubahan
+                $isOverlapping = false;
+                foreach ($parsedGroupsForOverlap as $pg) {
+                    // Beririsan jika Start Waktu Baru < End Waktu Lama DAN End Waktu Baru > Start Waktu Lama
+                    if ($startTotal < $pg['end'] && $endTotal > $pg['start']) {
+                        $isOverlapping = true;
+                        $addResult(
+                            "$label $periodText", 
+                            "Cek Waktu Beririsan (Overlap)", 
+                            "Waktu ini bertabrakan/beririsan dengan perubahan sebelumnya yaitu ({$pg['label']} {$pg['period']}).", 
+                            false
+                        );
+                    }
+                }
+                
+                if (!$isOverlapping) {
+                    $addResult("$label $periodText", "Cek Waktu Beririsan", "Tidak terdapat irisan waktu.", true);
+                }
+
+                $parsedGroupsForOverlap[] = [
+                    'label' => $label,
+                    'period' => $periodText,
+                    'start' => $startTotal,
+                    'end' => $endTotal
+                ];
+            }
+
+            // LOGIKA BARU 5: Threshold Perubahan Kelas Visibility 
+            // Rentang kelas: 1 (0-799), 2 (800-1499), 3 (1500-2999), 4 (3000-5000), 5 (>5000)
+            if (preg_match('/\b(\d{4}|CAVOK)\b/', $groupText, $visMatch)) {
+                $groupVis = $visMatch[1] === 'CAVOK' ? 9999 : (int)$visMatch[1];
+                
+                if ($currentBaseVis !== null) {
+                    $getVisClass = function($v) {
+                        if ($v <= 799) return 1;
+                        if ($v <= 1499) return 2;
+                        if ($v <= 2999) return 3;
+                        if ($v <= 5000) return 4;
+                        return 5;
+                    };
+
+                    $prevClass = $getVisClass($currentBaseVis);
+                    $newClass = $getVisClass($groupVis);
+
+                    if ($prevClass === $newClass) {
+                        $addResult(
+                            "$label Visibility {$visMatch[1]}", 
+                            "Perubahan Threshold Visibility", 
+                            "Visibility berubah dari {$currentBaseVis}m ke {$groupVis}m tapi masih dalam satu kelas/rentang yang sama. Perubahan visibility di TAF wajib melewati batas threshold (SOP).", 
+                            false
+                        );
+                    } else {
+                        $addResult(
+                            "$label Visibility {$visMatch[1]}", 
+                            "Perubahan Threshold Visibility", 
+                            "Visibility berubah kelas (dari kelas $prevClass ke $newClass). Perubahan signifikan valid.", 
+                            true
+                        );
+                    }
+                }
+
+                // Jika BECMG atau FM, jadikan current visibility terbaru untuk sandi selanjutnya
+                if ($label === 'BECMG' || str_contains($label, 'FM')) {
+                    $currentBaseVis = $groupVis;
+                }
+            }
+            
+            $orderChunks[] = [$label, $groupText];
         }
 
-        // 3. Pengecekan Urutan Parameter per Grup
+        // Pengecekan Urutan Parameter per Grup
         $ranks = ["wind" => 0, "visibility" => 1, "weather" => 2, "cloud" => 3, "wind_shear" => 4];
         
         foreach ($orderChunks as $chunk) {
@@ -144,15 +315,14 @@ class VerifyTafPage extends Page implements HasActions
             sort($sortedRankSequence);
             
             $badOrder = $rankSequence !== $sortedRankSequence;
-            $tokens = implode(" ", array_column($found, 2));
+            $tokensOutput = implode(" ", array_column($found, 2));
 
             if ($badOrder) {
-                $addResult($groupLabel, "Urutan parameter", "Urutan tidak sesuai (Angin → Vis → Cuaca → Awan). Ditemukan: $tokens.", false);
+                $addResult($groupLabel, "Urutan parameter", "Urutan tidak sesuai (Angin → Vis → Cuaca → Awan). Ditemukan: $tokensOutput.", false);
             } elseif (!empty($found)) {
-                $addResult($groupLabel, "Urutan parameter", "Urutan parameter sesuai. Ditemukan: $tokens.", true);
+                $addResult($groupLabel, "Urutan parameter", "Urutan parameter sesuai. Ditemukan: $tokensOutput.", true);
             }
 
-            // Cek urutan tinggi awan
             if (preg_match_all('/\b(?:FEW|SCT|BKN|OVC)(\d{3})(?:CB|TCU)?\b/', $elementText, $cloudMatches)) {
                 $heights = array_map('intval', $cloudMatches[1]);
                 $sortedHeights = $heights;
@@ -165,7 +335,7 @@ class VerifyTafPage extends Page implements HasActions
             }
         }
 
-        // 4. Aturan NSW
+        // Aturan NSW
         $getRainIntensity = function($text) {
             if (preg_match_all('/(?<![A-Z0-9])([+-]?(?:SH)?RA)(?![A-Z0-9])/', $text, $matches)) {
                 return $matches[1][0];
@@ -209,26 +379,26 @@ class VerifyTafPage extends Page implements HasActions
             }
         }
 
-        // 5. Mandatory Elements in GENERAL Group
+        // Mandatory Elements in GENERAL Group
         $generalText = $orderChunks[0][1];
         
         $windOk = (bool) preg_match('/\b(?:VRB|\d{3})\d{2,3}(?:G\d{2,3})?KT\b/', $generalText, $windMatch);
         $addResult($windMatch[0] ?? "Angin", "Kelompok Angin Permukaan", $windOk ? "Format Angin Valid." : "Kelompok angin tidak ditemukan.", $windOk);
 
         $visOk = (bool) preg_match('/\b(?:\d{4}|CAVOK)\b/', $generalText, $visMatch);
-        $addResult($visMatch[0] ?? "Visibility", "Kelompok Visibility", $visOk ? "Format Visibility Valid." : "Visibility/CAVOK tidak ditemukan.", $visOk);
+        $addResult($visMatch[0] ?? "Visibility", "Kelompok Visibility", $visOk ? "Format Visibility Valid." : "Visibility/CAVOK tidak ditemukan atau digit salah.", $visOk);
 
         $cloudOk = (bool) preg_match('/\b(?:CAVOK|FEW|SCT|BKN|OVC)\d{3}(?:CB|TCU)?\b|\b(?:NSC|NCD|SKC)\b/', $generalText, $cloudMatch);
         $addResult($cloudMatch[0] ?? "Cloud", "Kelompok Awan", $cloudOk ? "Kelompok awan/clear-sky dikenali." : "Kelompok awan/clear-sky tidak ditemukan.", $cloudOk);
 
-        // 6. PROB Check
+        // PROB Check
         if (preg_match_all('/\bPROB(?!30\b|40\b)\d{2}\b/', $clean, $badProbs)) {
             $addResult(implode(" ", array_unique($badProbs[0])), "Sandi PROB", "Nilai probabilitas selain PROB30/PROB40 ditemukan.", false);
         } elseif (preg_match_all('/\bPROB(?:30|40)\b/', $clean, $goodProbs)) {
             $addResult(implode(" / ", array_unique($goodProbs[0])), "Sandi PROB", "Nilai probabilitas valid.", true);
         }
 
-        // 7. Closing Marker
+        // Closing Marker
         if (str_ends_with(trim($clean), '=')) {
             $addResult("=", "Tanda Penutup", "Terdapat tanda (=) di akhir berita.", true);
         } else {
@@ -263,7 +433,6 @@ class VerifyTafPage extends Page implements HasActions
             $api = app(BmkgAviationApiService::class);
             $verifier = app(TafVerifierService::class);
 
-            // PERBAIKAN: Mundurkan $start 1 hari untuk mengambil TAF jam 23:00 UTC hari sebelumnya
             $start = $date->copy()->subDay()->startOfDay(); 
             $end = $date->copy()->endOfDay();
 
@@ -427,7 +596,6 @@ class VerifyTafPage extends Page implements HasActions
                 try {
                     $api = app(BmkgAviationApiService::class);
                     
-                    // PERBAIKAN: Mundurkan $start beberapa hari ke bulan sebelumnya agar TAF akhir bulan terbawa
                     $start = $date->copy()->subDays(2)->startOfMonth(); 
                     $end = $date->copy()->endOfMonth();
 
