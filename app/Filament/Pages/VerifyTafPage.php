@@ -263,7 +263,8 @@ class VerifyTafPage extends Page implements HasActions
             $api = app(BmkgAviationApiService::class);
             $verifier = app(TafVerifierService::class);
 
-            $start = $date->copy()->startOfDay();
+            // PERBAIKAN: Mundurkan $start 1 hari untuk mengambil TAF jam 23:00 UTC hari sebelumnya
+            $start = $date->copy()->subDay()->startOfDay(); 
             $end = $date->copy()->endOfDay();
 
             $rawData = $api->collectData($this->icao, $start, $end);
@@ -425,7 +426,9 @@ class VerifyTafPage extends Page implements HasActions
 
                 try {
                     $api = app(BmkgAviationApiService::class);
-                    $start = $date->copy()->startOfMonth();
+                    
+                    // PERBAIKAN: Mundurkan $start beberapa hari ke bulan sebelumnya agar TAF akhir bulan terbawa
+                    $start = $date->copy()->subDays(2)->startOfMonth(); 
                     $end = $date->copy()->endOfMonth();
 
                     $rawData = $api->collectData($this->icao, $start, $end);
