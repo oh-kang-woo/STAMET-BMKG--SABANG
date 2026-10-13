@@ -54,7 +54,6 @@ class VerifyTafPage extends Page implements HasActions
             }
         };
 
-        // Fungsi bantuan untuk menghitung selisih waktu secara berkelanjutan
         $getContinuousHour = function($day, $hour, $baseDay) {
             $diff = $day - $baseDay;
             if ($diff < -15) $diff += 30; 
@@ -474,14 +473,29 @@ class VerifyTafPage extends Page implements HasActions
                         break;
                     }
 
-                    $activeTaf = null;
+                    // PERBAIKAN: Kumpulkan semua TAF yang mencakup jam ini, lalu pilih yang paling terbaru di-issue (supersede)
+                    $validTafCandidates = [];
                     foreach ($tafs as $t) {
                         $vStart = Carbon::parse($t->validStart ?? $t->valid_start);
                         $vEnd = Carbon::parse($t->validEnd ?? $t->valid_end);
                         if ($vStart <= $targetTime && $targetTime <= $vEnd) {
-                            $activeTaf = $t;
-                            break;
+                            $validTafCandidates[] = $t;
                         }
+                    }
+
+                    $activeTaf = null;
+                    if (!empty($validTafCandidates)) {
+                        // Urutkan berdasarkan issue time. Asumsi issue time direpresentasikan dari raw regex jika tidak ada di model
+                        usort($validTafCandidates, function($a, $b) {
+                            $getIssueTime = function($rawTafText) {
+                                if (preg_match('/\b(\d{2})(\d{2})(\d{2})Z\b/', $rawTafText, $m)) {
+                                    return (int)$m[1] * 2400 + (int)$m[2] * 60 + (int)$m[3];
+                                }
+                                return 0;
+                            };
+                            return $getIssueTime($b->raw) <=> $getIssueTime($a->raw);
+                        });
+                        $activeTaf = $validTafCandidates[0]; // Ambil yang paling baru
                     }
 
                     $activeObs = null;
