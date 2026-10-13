@@ -672,4 +672,43 @@ class VerifyTafPage extends Page implements HasActions
                 }
             });
     }
+
+    public function viewDetailsAction(): Action
+    {
+        return Action::make('viewDetails')
+            ->modalHeading(fn (array $arguments) => 'Detail Sandi Jam ' . ($arguments['time'] ?? ''))
+            ->modalSubmitAction(false) // Sembunyikan tombol submit karena cuma untuk melihat
+            ->modalCancelActionLabel('Tutup')
+            ->form([
+                \Filament\Forms\Components\Textarea::make('taf_raw')
+                    ->label('TAF yang Digunakan')
+                    ->disabled()
+                    ->rows(3),
+                \Filament\Forms\Components\Textarea::make('metar_raw')
+                    ->label('METAR / SPECI yang Diverifikasi')
+                    ->disabled()
+                    ->rows(2),
+            ])
+            ->fillForm(function (array $arguments): array {
+                // Cari data berdasarkan jam yang diklik dari cache/property
+                $rows = $this->realtimeData['rows'] ?? [];
+                $targetTime = $arguments['time'] ?? '';
+                
+                $tafRaw = 'Tidak ada data TAF';
+                $metarRaw = 'Tidak ada observasi (METAR/SPECI)';
+
+                foreach ($rows as $row) {
+                    if ($row['time'] === $targetTime) {
+                        $tafRaw = $row['taf_raw'] ?? 'Tidak ada data TAF';
+                        $metarRaw = $row['metar_raw'] ?? 'Tidak ada observasi (METAR/SPECI)';
+                        break;
+                    }
+                }
+
+                return [
+                    'taf_raw' => $tafRaw,
+                    'metar_raw' => $metarRaw,
+                ];
+            });
+    }
 }

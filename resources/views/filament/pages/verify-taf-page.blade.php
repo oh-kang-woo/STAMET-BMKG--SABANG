@@ -187,7 +187,7 @@
 
             {{-- TABEL VERIFIKASI PER JAM --}}
             <x-filament::section icon="heroicon-m-table-cells" header="Verifikasi Per Jam">
-                <div class="text-sm text-gray-500 mb-4">Setiap jam yang memiliki observasi akan dihitung ulang.</div>
+                <div class="text-sm text-gray-500 mb-4">Setiap jam yang memiliki observasi akan dihitung ulang. Klik pada baris untuk melihat detail TAF dan METAR.</div>
                 <div class="overflow-x-auto rounded-lg border border-gray-200 dark:border-gray-700">
                     <table class="w-full text-center text-xs border-collapse">
                         <thead>
@@ -206,7 +206,7 @@
                         </thead>
                         <tbody class="divide-y divide-gray-100 dark:divide-gray-700 text-[11px] bg-white dark:bg-gray-900">
                             @foreach($rows as $row)
-                                <tr>
+                                <tr wire:click="mountAction('viewDetails', { time: '{{ $row['time'] }}' })" class="cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-800 transition">
                                     <td class="p-3 font-mono font-bold">{{ $row['time'] }}</td>
                                     <td class="p-3">{{ $row['taf_raw'] !== 'Data TAF Belum Tersedia' ? '1' : '-' }}</td>
                                     <td class="p-3">{{ $row['metar_raw'] !== 'Data METAR Belum Tersedia' ? '1' : '-' }}</td>
@@ -230,6 +230,9 @@
             </x-filament::section>
         </div>
     </div>
+    
+    {{-- Komponen modal bawaan Filament --}}
+    <x-filament-actions::modals />
 
     <script>
         document.addEventListener('livewire:initialized', () => {
