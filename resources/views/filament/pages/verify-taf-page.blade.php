@@ -206,7 +206,7 @@
                         </thead>
                         <tbody class="divide-y divide-gray-100 dark:divide-gray-700 text-[11px] bg-white dark:bg-gray-900">
                             @foreach($rows as $row)
-                                <tr wire:click="mountAction('viewDetails', { time: '{{ $row['time'] }}' })" class="cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-800 transition">
+                                <tr wire:click="mountAction('viewDetails', { time: '{{ $row['time'] }}' })" class="cursor-pointer hover:bg-primary-50 dark:hover:bg-primary-400/10 transition">
                                     <td class="p-3 font-mono font-bold">{{ $row['time'] }}</td>
                                     <td class="p-3">{{ $row['taf_raw'] !== 'Data TAF Belum Tersedia' ? '1' : '-' }}</td>
                                     <td class="p-3">{{ $row['metar_raw'] !== 'Data METAR Belum Tersedia' ? '1' : '-' }}</td>
