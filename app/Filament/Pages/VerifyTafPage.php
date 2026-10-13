@@ -88,7 +88,16 @@ class VerifyTafPage extends Page implements HasActions
             $endHour = (int)$headerMatch[9];
 
             $addResult("$tafType WITN", "Identifikasi TAF", "Header TAF dan jenis sandi dikenali.", true);
-            $addResult($tafType, "Jenis prakiraan", "Jenis prakiraan valid.", true);
+            
+            // ATURAN CCA/AAA (SESUAI EVALUASI SENIOR)
+            if (str_contains($tafType, 'COR') && !preg_match('/^FTID40\s+WITN\s+\d{6}\s+CC[A-Z]/', $clean)) {
+                $addResult("Header TAF COR", "Kelompok BBB (Koreksi)", "Sandi TAF COR harus mencantumkan indikator CCA (atau CCB, CCC) pada baris heading FTID40 WITN.", false);
+            } elseif (str_contains($tafType, 'AMD') && !preg_match('/^FTID40\s+WITN\s+\d{6}\s+AA[A-Z]/', $clean)) {
+                $addResult("Header TAF AMD", "Kelompok BBB (Amandemen)", "Sandi TAF AMD harus mencantumkan indikator AAA (atau AAB, AAC) pada baris heading FTID40 WITN.", false);
+            } else {
+                $addResult($tafType, "Jenis prakiraan", "Jenis prakiraan (beserta kelompok BBB jika ada) valid.", true);
+            }
+            
             $addResult($icao, "Indikator lokasi", "Indikator lokasi (WITN) valid.", true);
             $addResult($headerMatch[3] . $headerMatch[4] . $headerMatch[5] . 'Z', "Waktu Penerbitan", "Format Waktu Penerbitan Valid.", true);
 
@@ -352,47 +361,53 @@ class VerifyTafPage extends Page implements HasActions
             }
         }
 
-        // Aturan NSW
-        $getRainIntensity = function($text) {
-            if (preg_match_all('/(?<![A-Z0-9])([+-]?(?:SH)?RA)(?![A-Z0-9])/', $text, $matches)) {
+        // PERBAIKAN: ATURAN CUACA SIGNIFIKAN & NSW (SESUAI EVALUASI SENIOR)
+        $getWeatherToken = function($text) {
+            if (preg_match_all('/(?<![A-Z0-9])([+-]?(?:TSRA|SHRA|RA|SH|SN|DZ|GR|GS|TS))(?![A-Z0-9])/', $text, $matches)) {
                 return $matches[1][0];
             }
             return null;
         };
 
-        $previousWeather = $getRainIntensity($orderChunks[0][1]);
-        $previousHadSignificantRain = in_array($previousWeather, ["RA", "+RA", "SHRA", "+SHRA"]);
+        // Daftar cuaca yg kalau hilang wajib diganti NSW (termasuk -RA sesuai koreksi poin 3)
+        $significantWeatherList = ['-TSRA', 'TSRA', '+TSRA', '-RA', 'RA', '+RA', 'SH', '-SHRA', 'SHRA', '+SHRA', 'SN', '+SN'];
+
+        $previousWeather = $getWeatherToken($orderChunks[0][1]);
+        $previousHadSignificant = in_array($previousWeather, $significantWeatherList);
 
         for ($i = 1; $i < count($orderChunks); $i++) {
             $groupLabel = $orderChunks[$i][0];
             $groupText = $orderChunks[$i][1];
 
-            if (!preg_match('/^(?:TEMPO|BECMG|PROB30 TEMPO|PROB40 TEMPO)/', $groupLabel)) {
-                $currentWeather = $getRainIntensity($groupText);
+            if (!preg_match('/^(?:TEMPO|BECMG|PROB)/', $groupLabel)) {
+                $currentWeather = $getWeatherToken($groupText);
                 if ($currentWeather) {
-                    $previousHadSignificantRain = in_array($currentWeather, ["RA", "+RA", "SHRA", "+SHRA"]);
+                    $previousHadSignificant = in_array($currentWeather, $significantWeatherList);
                 }
                 continue;
             }
 
-            $currentWeather = $getRainIntensity($groupText);
+            $currentWeather = $getWeatherToken($groupText);
             $hasNsw = (bool) preg_match('/\bNSW\b/', $groupText);
 
-            if (in_array($currentWeather, ["-RA", "-SHRA"]) && $hasNsw) {
-                $addResult($groupLabel, "Aturan NSW", "NSW tidak boleh digunakan jika hujan masih diprakirakan (-RA/-SHRA).", false);
-            } elseif ($previousHadSignificantRain && in_array($currentWeather, ["-RA", "-SHRA"])) {
-                $addResult($groupLabel, "Aturan NSW", "Hujan diprakirakan $currentWeather; NSW tidak boleh menggantikannya.", false);
-            } elseif ($previousHadSignificantRain && !$currentWeather && !$hasNsw) {
-                $addResult($groupLabel, "Aturan NSW", "Sebelumnya diprakirakan RA/+RA. Jika hujan berakhir, cantumkan NSW.", false);
-            } elseif ($hasNsw) {
-                $addResult($groupLabel, "Aturan NSW", "NSW digunakan dengan benar untuk menandai berakhirnya cuaca signifikan.", true);
+            // CEK KOREKSI EVALUATOR POIN 4 & 5: Perubahan -RA tidak signifikan
+            if ($currentWeather === '-RA') {
+                $addResult("$groupLabel $currentWeather", "Signifikansi Cuaca", "Perubahan cuaca menjadi -RA tidak signifikan. Hapus -RA dari kelompok perubahan ini.", false);
             }
 
-            $previousWeather = $currentWeather ?: ($hasNsw ? "NONE" : $previousWeather);
+            // CEK ATURAN NSW & KOREKSI POIN 3
+            if ($currentWeather && $hasNsw) {
+                $addResult($groupLabel, "Aturan NSW", "NSW tidak boleh ditulis jika cuaca ($currentWeather) masih diprakirakan.", false);
+            } elseif ($previousHadSignificant && !$currentWeather && !$hasNsw) {
+                $addResult($groupLabel, "Aturan NSW", "Sebelumnya diprakirakan cuaca $previousWeather. Jika cuaca ini berakhir, WAJIB cantumkan NSW.", false);
+            } elseif ($previousHadSignificant && $hasNsw) {
+                $addResult($groupLabel, "Aturan NSW", "NSW digunakan dengan benar untuk menandai berakhirnya cuaca $previousWeather.", true);
+            }
+
             if ($currentWeather) {
-                $previousHadSignificantRain = in_array($currentWeather, ["RA", "+RA", "SHRA", "+SHRA"]);
+                $previousHadSignificant = in_array($currentWeather, $significantWeatherList);
             } elseif ($hasNsw) {
-                $previousHadSignificantRain = false;
+                $previousHadSignificant = false;
             }
         }
 
