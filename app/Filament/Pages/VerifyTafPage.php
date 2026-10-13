@@ -96,6 +96,10 @@ class VerifyTafPage extends Page implements HasActions
             $startTotal = $getContinuousHour($startDay, $startHour, $issueDay);
             $endTotal = $getContinuousHour($endDay, $endHour, $issueDay);
             
+            if ($startDay === $endDay && $startHour === $endHour) {
+                $endTotal += 24;
+            }
+            
             $durationHours = $endTotal - $startTotal;
             $diffIssueToStart = $startTotal - $issueTotal;
 
@@ -203,6 +207,10 @@ class VerifyTafPage extends Page implements HasActions
 
                 $gStartTotal = $getContinuousHour($gStartDay, $gStartHour, $issueDay);
                 $gEndTotal = $getContinuousHour($gEndDay, $gEndHour, $issueDay);
+                
+                if ($gStartDay === $gEndDay && $gStartHour === $gEndHour) {
+                    $gEndTotal += 24;
+                }
                 
                 $gDuration = $gEndTotal - $gStartTotal;
                 $periodText = "{$tm[1]}{$tm[2]}/{$tm[3]}{$tm[4]}";
@@ -473,7 +481,7 @@ class VerifyTafPage extends Page implements HasActions
                         break;
                     }
 
-                    // PERBAIKAN: Kumpulkan semua TAF yang mencakup jam ini, lalu pilih yang paling terbaru di-issue (supersede)
+                    // PERBAIKAN BUG: Kumpulkan semua kandidat yang aktif di targetTime
                     $validTafCandidates = [];
                     foreach ($tafs as $t) {
                         $vStart = Carbon::parse($t->validStart ?? $t->valid_start);
@@ -485,17 +493,37 @@ class VerifyTafPage extends Page implements HasActions
 
                     $activeTaf = null;
                     if (!empty($validTafCandidates)) {
-                        // Urutkan berdasarkan issue time. Asumsi issue time direpresentasikan dari raw regex jika tidak ada di model
-                        usort($validTafCandidates, function($a, $b) {
-                            $getIssueTime = function($rawTafText) {
-                                if (preg_match('/\b(\d{2})(\d{2})(\d{2})Z\b/', $rawTafText, $m)) {
-                                    return (int)$m[1] * 2400 + (int)$m[2] * 60 + (int)$m[3];
-                                }
-                                return 0;
-                            };
-                            return $getIssueTime($b->raw) <=> $getIssueTime($a->raw);
-                        });
-                        $activeTaf = $validTafCandidates[0]; // Ambil yang paling baru
+                        $bestTaf = null;
+                        $maxScore = -INF;
+                        
+                        foreach ($validTafCandidates as $c) {
+                            $rawText = $c->raw ?? '';
+                            $issueScore = 0;
+                            
+                            // Tarik waktu rilis dari TAF Raw 
+                            if (preg_match('/(?:FT[A-Z0-9]{4}\s+\w{4}\s+(\d{2})(\d{2})(\d{2})|TAF(?:\s+(?:AMD|COR))?\s+\w{4}\s+(\d{2})(\d{2})(\d{2})Z)/', $rawText, $m)) {
+                                $day = (int)($m[1] ?: $m[4]);
+                                $hourNum = (int)($m[2] ?: $m[5]);
+                                $minNum = (int)($m[3] ?: $m[6]);
+                                
+                                $diffDay = $day - $targetTime->day;
+                                if ($diffDay > 15) $diffDay -= 30; // Jika pindah bulan
+                                if ($diffDay < -15) $diffDay += 30; // Jika pindah bulan
+                                
+                                $issueScore = ($diffDay * 1440) + ($hourNum * 60) + $minNum;
+                            } else {
+                                $issueScore = -999999;
+                            }
+
+                            if (str_contains($rawText, 'COR')) $issueScore += 2;
+                            if (str_contains($rawText, 'AMD')) $issueScore += 1;
+
+                            if ($issueScore > $maxScore) {
+                                $maxScore = $issueScore;
+                                $bestTaf = $c;
+                            }
+                        }
+                        $activeTaf = $bestTaf;
                     }
 
                     $activeObs = null;

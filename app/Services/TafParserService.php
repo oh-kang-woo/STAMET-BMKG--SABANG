@@ -32,6 +32,12 @@ class TafParserService
             if ($endDay < $startDay) {
                 $validEnd->addMonth();
             }
+            
+            // PERBAIKAN BUG DURASI NOL: 
+            // TAF misal 1300/1300 artinya berlaku dari jam 00 tgl 13 s.d. jam 00 tgl 14
+            if ($startDay === $endDay && $startHour === $endHour) {
+                $validEnd->addDay();
+            }
         }
 
         $groups = [];
@@ -61,6 +67,11 @@ class TafParserService
                     $gStart = $anchor->copy()->day((int)$tm[1])->setTime((int)$tm[2], 0);
                     $gEnd = $anchor->copy()->day((int)$tm[3])->setTime((int)$tm[4], 0);
                     if ((int)$tm[3] < (int)$tm[1]) $gEnd->addMonth();
+                    
+                    // PERBAIKAN BUG DURASI GRUP
+                    if ((int)$tm[1] === (int)$tm[3] && (int)$tm[2] === (int)$tm[4]) {
+                        $gEnd->addDay();
+                    }
                 } elseif (preg_match('/^FM(\d{2})(\d{2})(\d{2})/', $kind, $fm)) {
                     $gStart = $anchor->copy()->day((int)$fm[1])->setTime((int)$fm[2], (int)$fm[3]);
                     $kind = 'FM';
