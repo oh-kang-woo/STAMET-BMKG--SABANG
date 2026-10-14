@@ -361,7 +361,7 @@ class VerifyTafPage extends Page implements HasActions
             }
         }
 
-        // PERBAIKAN: ATURAN CUACA SIGNIFIKAN & NSW (SESUAI EVALUASI SENIOR)
+        // PERBAIKAN: ATURAN CUACA SIGNIFIKAN & NSW (Hanya yang diizinkan senior)
         $getWeatherToken = function($text) {
             if (preg_match_all('/(?<![A-Z0-9])([+-]?(?:TSRA|SHRA|RA|SH|SN|DZ|GR|GS|TS))(?![A-Z0-9])/', $text, $matches)) {
                 return $matches[1][0];
@@ -369,8 +369,8 @@ class VerifyTafPage extends Page implements HasActions
             return null;
         };
 
-        // Daftar cuaca yg kalau hilang wajib diganti NSW (termasuk -RA sesuai koreksi poin 3)
-        $significantWeatherList = ['-TSRA', 'TSRA', '+TSRA', '-RA', 'RA', '+RA', 'SH', '-SHRA', 'SHRA', '+SHRA', 'SN', '+SN'];
+        // Daftar cuaca yg kalau hilang WAJIB diganti NSW (HANYA INI SESUAI ARAHAN: -TSRA, TSRA, +TSRA, RA, +RA, SH, SN)
+        $significantWeatherList = ['-TSRA', 'TSRA', '+TSRA', 'RA', '+RA', 'SH', 'SN'];
 
         $previousWeather = $getWeatherToken($orderChunks[0][1]);
         $previousHadSignificant = in_array($previousWeather, $significantWeatherList);
@@ -390,18 +390,21 @@ class VerifyTafPage extends Page implements HasActions
             $currentWeather = $getWeatherToken($groupText);
             $hasNsw = (bool) preg_match('/\bNSW\b/', $groupText);
 
-            // CEK KOREKSI EVALUATOR POIN 4 & 5: Perubahan -RA tidak signifikan
+            // Cek jika ada -RA (Perubahan tidak signifikan)
             if ($currentWeather === '-RA') {
                 $addResult("$groupLabel $currentWeather", "Signifikansi Cuaca", "Perubahan cuaca menjadi -RA tidak signifikan. Hapus -RA dari kelompok perubahan ini.", false);
             }
 
-            // CEK ATURAN NSW & KOREKSI POIN 3
+            // ATURAN NSW (Hanya memvalidasi jika cuaca sebelumnya ada di $significantWeatherList)
             if ($currentWeather && $hasNsw) {
                 $addResult($groupLabel, "Aturan NSW", "NSW tidak boleh ditulis jika cuaca ($currentWeather) masih diprakirakan.", false);
             } elseif ($previousHadSignificant && !$currentWeather && !$hasNsw) {
-                $addResult($groupLabel, "Aturan NSW", "Sebelumnya diprakirakan cuaca $previousWeather. Jika cuaca ini berakhir, WAJIB cantumkan NSW.", false);
+                $addResult($groupLabel, "Aturan NSW", "Sebelumnya diprakirakan cuaca signifikan ($previousWeather). Jika cuaca ini berakhir, WAJIB cantumkan NSW.", false);
             } elseif ($previousHadSignificant && $hasNsw) {
-                $addResult($groupLabel, "Aturan NSW", "NSW digunakan dengan benar untuk menandai berakhirnya cuaca $previousWeather.", true);
+                $addResult($groupLabel, "Aturan NSW", "NSW digunakan dengan benar untuk menandai berakhirnya cuaca signifikan ($previousWeather).", true);
+            } elseif (!$previousHadSignificant && $hasNsw) {
+                // TAMBAHAN: Salahkan jika NSW digunakan untuk mengakhiri cuaca yang BUKAN signifikan (seperti -RA)
+                $addResult($groupLabel, "Aturan NSW", "NSW hanya digunakan untuk menandai berakhirnya cuaca signifikan tertentu (-TSRA, TSRA, +TSRA, RA, +RA, SH, SN). Penggunaan NSW di sini tidak tepat.", false);
             }
 
             if ($currentWeather) {
