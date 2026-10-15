@@ -412,8 +412,11 @@ class SinoptikDataHelper
             'evaporation_24hours_mm_eee'          => $toFloat($sinoptikData['evaporation_24hours_mm_eee'] ?? null),
             'evaporation_eq_indicator_ie'         => $toInt($sinoptikData['evaporation_eq_indicator_ie'] ?? null),
 
-            'land_cond'                           => $toInt($sinoptikData['land_cond'] ?? 0),
-            'land_note'                           => $toStrOrEmpty($sinoptikData['land_note'] ?? null),
+            // PERBAIKAN: Support fallback ke key bahasa Indonesia agar tidak memaksa jadi 0
+            'land_cond'                           => $toInt($sinoptikData['land_cond'] ?? $sinoptikData['keadaan_tanah'] ?? null),
+            
+            // PERBAIKAN: Support fallback ke key "catatan" agar tidak selalu kosong
+            'land_note'                           => $toStrOrEmpty($sinoptikData['land_note'] ?? $sinoptikData['catatan'] ?? null),
 
             'pressure_qff_mb_derived'             => $toFloat($sinoptikData['pressure_qff_mb_derived'] ?? null),
             'pressure_qfe_mb_derived'             => $toFloat($sinoptikData['pressure_qfe_mb_derived'] ?? null),
@@ -477,6 +480,10 @@ class SinoptikDataHelper
                 'temp_min_c_tntntn' => $dataAws->temp_min_c_tntntn,
                 'relative_humidity_pc' => $dataAws->relative_humidity_pc,
                 'created_by' => $userId ?? null,
+                
+                // PERBAIKAN: Menambahkan default payload agar validasi API tidak gagal saat kirim otomatis
+                'land_cond' => 0,
+                'land_note' => '',
             ];
 
             if ($hour % 3 === 0) {
