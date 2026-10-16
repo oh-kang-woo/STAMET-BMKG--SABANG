@@ -293,6 +293,14 @@ class SinoptikDataHelper
         $sinoptikData['cloud_med_cover_1'] = (string) ($sinoptikData['cloud_med_cover_1'] ?? $sinoptikData['cloud_med_cover_oktas'] ?? null);
         $sinoptikData['cloud_high_cover_1'] = (string) ($sinoptikData['cloud_high_cover_1'] ?? $sinoptikData['cloud_high_cover_oktas'] ?? null);
 
+        // FIX: Mapping data dari Excel ke field database lokal
+        if (isset($sinoptikData['keadaan_tanah'])) {
+            $sinoptikData['land_cond'] = (int) $sinoptikData['keadaan_tanah'];
+        }
+        if (isset($sinoptikData['catatan'])) {
+            $sinoptikData['land_note'] = (string) $sinoptikData['catatan'];
+        }
+
         $sinoptikData['observer_id'] = static::getBmkgsatuObserverId($sinoptikData['observer_id'] ?? null);
 
         $sinoptikData['encoded_synop'] = static::sanitizeEncodedSynop($sinoptikData['encoded_synop']);
