@@ -489,9 +489,9 @@ class SinoptikDataHelper
                 'relative_humidity_pc' => $dataAws->relative_humidity_pc,
                 'created_by' => $userId ?? null,
                 
-                // PERBAIKAN: Menambahkan default payload agar validasi API tidak gagal saat kirim otomatis
-                'land_cond' => 0,
-                'land_note' => '',
+                // PERBAIKAN: Ubah dari 0 menjadi null agar pengiriman otomatis AWS tidak menimpa keadaan_tanah di Excel menjadi 0
+                'land_cond' => null,
+                'land_note' => null,
             ];
 
             if ($hour % 3 === 0) {
