@@ -39,10 +39,13 @@ class FetchSinoptikDataJob implements ShouldQueue
 
     public function handle(): void
     {
-
         try {
             logger("Menarik data sinoptik {$this->timestamp} dari server sinoptik");
             $response = SinoptikDataHelper::fetchDataSinoptik($this->timestamp, $this->userId);
+            
+            // TAMBAHKAN BARIS INI UNTUK MENGINTIP DATA DARI EXCEL:
+            logger('DATA MENTAH EXCEL: ' . json_encode($response)); 
+
             if ($response['status'] == 'success') {
                 logger("Berhasil menarik data sinoptik {$this->timestamp}");
                 $this->sendNotification($this->userId, true);
