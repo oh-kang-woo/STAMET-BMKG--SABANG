@@ -13,7 +13,8 @@ class BmkgAviationApiService
 
     public function collectData(string $icao, Carbon $start, Carbon $end): array
     {
-        $anchor = $start->copy()->addDays(15);
+        // PERBAIKAN: Menggunakan $end sebagai anchor untuk mencegah bug pergeseran bulan
+        $anchor = $end->copy()->startOfDay();
 
         $allRawTaf = [];
         $allRawMetar = [];
