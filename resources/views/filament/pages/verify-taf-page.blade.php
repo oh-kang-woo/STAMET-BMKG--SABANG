@@ -75,7 +75,7 @@
                             Verifikasi TAFOR
                         </x-filament::button>
                         
-                        {{-- PERBAIKAN 3: Tombol Direct Send jika QC Valid --}}
+                        {{-- Tombol Direct Send jika QC Valid --}}
                         @if(!empty($qcResult))
                             <x-filament::button 
                                 wire:click="sendTaf" 
@@ -121,7 +121,6 @@
                             <table class="w-full text-sm text-left">
                                 <thead class="border-b dark:border-gray-700 bg-gray-50 dark:bg-gray-800">
                                     <tr>
-                                        {{-- PERBAIKAN 1: Penggunaan nama kolom Parameter Cuaca --}}
                                         <th class="p-3 border-r dark:border-gray-700 font-bold text-gray-900 dark:text-gray-200">Parameter Cuaca</th>
                                         <th class="p-3 border-r dark:border-gray-700 font-bold text-gray-900 dark:text-gray-200">Aturan QC</th>
                                         <th class="p-3 font-bold text-gray-900 dark:text-gray-200">Keterangan</th>
@@ -129,12 +128,17 @@
                                 </thead>
                                 <tbody class="divide-y divide-gray-200 dark:divide-gray-700 bg-white dark:bg-gray-900">
                                     @foreach($qcResult['results'] as $res)
-                                        {{-- PERBAIKAN 2: Penanda Merah Mencolok untuk Parameter Cuaca yang Salah --}}
-                                        <tr class="{{ $res['is_valid'] ? 'text-gray-800 dark:text-gray-300' : 'bg-red-100 dark:bg-red-950/80 text-red-900 dark:text-red-200 font-semibold border-l-4 border-red-600' }}">
-                                            <td class="p-3 border-r dark:border-gray-700 font-mono font-bold {{ $res['is_valid'] ? 'text-primary-600 dark:text-primary-400' : 'text-red-700 dark:text-red-300' }}">
+                                        <tr @if(!$res['is_valid']) style="background-color: rgba(220, 38, 38, 0.25) !important; border-left: 4px solid #ef4444 !important;" @endif
+                                            class="{{ $res['is_valid'] ? 'text-gray-800 dark:text-gray-300' : 'text-red-900 dark:text-red-100 font-semibold' }}">
+                                            
+                                            <td class="p-3 border-r dark:border-gray-700 font-mono font-bold {{ $res['is_valid'] ? 'text-primary-600 dark:text-primary-400' : 'text-red-600 dark:text-red-300' }}">
                                                 {{ $res['parameter_cuaca'] ?? $res['element'] }}
                                             </td>
-                                            <td class="p-3 border-r dark:border-gray-700 font-medium">{{ $res['rule'] }}</td>
+                                            
+                                            <td class="p-3 border-r dark:border-gray-700 font-medium">
+                                                {{ $res['rule'] }}
+                                            </td>
+                                            
                                             <td class="p-3 flex items-center gap-2.5 font-medium">
                                                 @if($res['is_valid'])
                                                     <div class="flex items-center justify-center w-5 h-5 rounded-full bg-emerald-100 dark:bg-emerald-900 text-emerald-600 dark:text-emerald-400 flex-shrink-0">
@@ -143,10 +147,10 @@
                                                     <span>{{ $res['remark'] }}</span>
                                                 @else
                                                     <!-- Badge Merah Tegas & Jelas -->
-                                                    <div class="flex items-center justify-center px-2 py-0.5 rounded bg-red-600 text-white font-bold text-xs flex-shrink-0 shadow-sm">
+                                                    <div style="background-color: #dc2626 !important; color: #ffffff !important;" class="flex items-center justify-center px-2 py-0.5 rounded font-bold text-xs flex-shrink-0 shadow-sm">
                                                         ✕ SALAH
                                                     </div>
-                                                    <span class="text-red-800 dark:text-red-200 font-semibold">{{ $res['remark'] }}</span>
+                                                    <span class="text-red-900 dark:text-red-100 font-bold">{{ $res['remark'] }}</span>
                                                 @endif
                                             </td>
                                         </tr>
