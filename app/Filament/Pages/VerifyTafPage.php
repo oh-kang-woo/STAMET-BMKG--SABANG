@@ -3,6 +3,7 @@
 namespace App\Filament\Pages;
 
 use App\Services\BmkgAviationApiService;
+use App\Services\BmkgsatuApiService;
 use App\Services\TafReportExcelService;
 use App\Services\TafVerifierService;
 use Carbon\Carbon;
@@ -42,12 +43,14 @@ class VerifyTafPage extends Page implements HasActions
         $results = [];
         $errors = 0;
 
-        $addResult = function($element, $rule, $remark, $isValid) use (&$results, &$errors) {
+        // PENYESUAIAN 1: Penggunaan istilah "parameter_cuaca" dengan tetap menjaga alias "element"
+        $addResult = function($parameterCuaca, $rule, $remark, $isValid) use (&$results, &$errors) {
             $results[] = [
-                'element' => $element,
-                'rule' => $rule,
-                'remark' => $remark,
-                'is_valid' => $isValid
+                'parameter_cuaca' => $parameterCuaca,
+                'element'         => $parameterCuaca, // Aliasing untuk mencegah breakage jika ada komponen lain yang membaca 'element'
+                'rule'            => $rule,
+                'remark'          => $remark,
+                'is_valid'        => $isValid
             ];
             if (!$isValid) {
                 $errors++;
@@ -361,7 +364,7 @@ class VerifyTafPage extends Page implements HasActions
             }
         }
 
-        // PERBAIKAN: ATURAN CUACA SIGNIFIKAN & NSW (Hanya yang diizinkan senior)
+        // PERBAIKAN: ATURAN CUACA SIGNIFIKAN & NSW
         $getWeatherToken = function($text) {
             if (preg_match_all('/(?<![A-Z0-9])([+-]?(?:TSRA|SHRA|RA|SH|SN|DZ|GR|GS|TS))(?![A-Z0-9])/', $text, $matches)) {
                 return $matches[1][0];
@@ -369,7 +372,6 @@ class VerifyTafPage extends Page implements HasActions
             return null;
         };
 
-        // Daftar cuaca yg kalau hilang WAJIB diganti NSW (HANYA INI SESUAI ARAHAN: -TSRA, TSRA, +TSRA, RA, +RA, SH, SN)
         $significantWeatherList = ['-TSRA', 'TSRA', '+TSRA', 'RA', '+RA', 'SH', 'SN'];
 
         $previousWeather = $getWeatherToken($orderChunks[0][1]);
@@ -390,12 +392,10 @@ class VerifyTafPage extends Page implements HasActions
             $currentWeather = $getWeatherToken($groupText);
             $hasNsw = (bool) preg_match('/\bNSW\b/', $groupText);
 
-            // Cek jika ada -RA (Perubahan tidak signifikan)
             if ($currentWeather === '-RA') {
                 $addResult("$groupLabel $currentWeather", "Signifikansi Cuaca", "Perubahan cuaca menjadi -RA tidak signifikan. Hapus -RA dari kelompok perubahan ini.", false);
             }
 
-            // ATURAN NSW (Hanya memvalidasi jika cuaca sebelumnya ada di $significantWeatherList)
             if ($currentWeather && $hasNsw) {
                 $addResult($groupLabel, "Aturan NSW", "NSW tidak boleh ditulis jika cuaca ($currentWeather) masih diprakirakan.", false);
             } elseif ($previousHadSignificant && !$currentWeather && !$hasNsw) {
@@ -403,7 +403,6 @@ class VerifyTafPage extends Page implements HasActions
             } elseif ($previousHadSignificant && $hasNsw) {
                 $addResult($groupLabel, "Aturan NSW", "NSW digunakan dengan benar untuk menandai berakhirnya cuaca signifikan ($previousWeather).", true);
             } elseif (!$previousHadSignificant && $hasNsw) {
-                // TAMBAHAN: Salahkan jika NSW digunakan untuk mengakhiri cuaca yang BUKAN signifikan (seperti -RA)
                 $addResult($groupLabel, "Aturan NSW", "NSW hanya digunakan untuk menandai berakhirnya cuaca signifikan tertentu (-TSRA, TSRA, +TSRA, RA, +RA, SH, SN). Penggunaan NSW di sini tidak tepat.", false);
             }
 
@@ -446,6 +445,70 @@ class VerifyTafPage extends Page implements HasActions
             'errors' => $errors,
             'is_valid' => $errors === 0
         ];
+    }
+
+    // PENYESUAIAN 2: Direct Send dengan penanganan aman dependency injection Livewire
+    public function sendTaf(?BmkgsatuApiService $apiService = null): void
+    {
+        $apiService = $apiService ?? app(BmkgsatuApiService::class);
+
+        $this->checkQualityControl();
+
+        if (empty(trim($this->rawTaf))) {
+            Notification::make()
+                ->title('Gagal Mengirim')
+                ->body('Sandi TAF masih kosong. Harap isi sandi terlebih dahulu.')
+                ->warning()
+                ->send();
+            return;
+        }
+
+        if (!($this->qcResult['is_valid'] ?? false)) {
+            Notification::make()
+                ->title('Peringatan Quality Control')
+                ->body('Sandi TAF masih memiliki kesalahan QC. Harap perbaiki parameter yang bertanda merah sebelum mengirim.')
+                ->danger()
+                ->send();
+            return;
+        }
+
+        try {
+            $cleanTaf = trim(preg_replace('/\s+/', ' ', str_replace('=', ' = ', strtoupper($this->rawTaf))));
+            $cleanTaf = trim(str_replace(' =', '=', $cleanTaf));
+
+            preg_match('/^(FTID40)\s+([A-Z]{4})/i', $cleanTaf, $headerMatch);
+            $ttaaii = $headerMatch[1] ?? 'FTID40';
+            $cccc   = $headerMatch[2] ?? $this->icao;
+
+            $payload = [
+                'type_message'        => 2, // ID tipe pesan GTS TAF
+                'station_wmo_id'      => setting('station_wmo_id', '96011'),
+                'sandi_gts'           => $cleanTaf,
+                'ttaaii'              => $ttaaii,
+                'cccc'                => $cccc,
+                'timestamp_data'      => now()->toIso8601String(),
+                'timestamp_sent_data' => now()->toIso8601String(),
+                'need_ftp'            => 1,
+            ];
+
+            $response = $apiService->sendGtsMessage($payload);
+
+            if ($response->successful()) {
+                Notification::make()
+                    ->title('Sandi TAF Berhasil Dikirim!')
+                    ->body('Sandi TAF yang sudah valid berhasil dikirim langsung ke BMKG Satu.')
+                    ->success()
+                    ->send();
+            } else {
+                throw new \Exception('Respon BMKG Satu: ' . $response->body());
+            }
+        } catch (\Exception $e) {
+            Notification::make()
+                ->title('Gagal Mengirim Sandi TAF')
+                ->body('Terjadi kesalahan saat mengirim: ' . $e->getMessage())
+                ->danger()
+                ->send();
+        }
     }
 
     public function clearQualityControl(): void
@@ -499,7 +562,6 @@ class VerifyTafPage extends Page implements HasActions
                         break;
                     }
 
-                    // PERBAIKAN BUG: Kumpulkan semua kandidat yang aktif di targetTime
                     $validTafCandidates = [];
                     foreach ($tafs as $t) {
                         $vStart = Carbon::parse($t->validStart ?? $t->valid_start);
@@ -518,15 +580,14 @@ class VerifyTafPage extends Page implements HasActions
                             $rawText = $c->raw ?? '';
                             $issueScore = 0;
                             
-                            // Tarik waktu rilis dari TAF Raw 
                             if (preg_match('/(?:FT[A-Z0-9]{4}\s+\w{4}\s+(\d{2})(\d{2})(\d{2})|TAF(?:\s+(?:AMD|COR))?\s+\w{4}\s+(\d{2})(\d{2})(\d{2})Z)/', $rawText, $m)) {
                                 $day = (int)($m[1] ?: $m[4]);
                                 $hourNum = (int)($m[2] ?: $m[5]);
                                 $minNum = (int)($m[3] ?: $m[6]);
                                 
                                 $diffDay = $day - $targetTime->day;
-                                if ($diffDay > 15) $diffDay -= 30; // Jika pindah bulan
-                                if ($diffDay < -15) $diffDay += 30; // Jika pindah bulan
+                                if ($diffDay > 15) $diffDay -= 30; 
+                                if ($diffDay < -15) $diffDay += 30; 
                                 
                                 $issueScore = ($diffDay * 1440) + ($hourNum * 60) + $minNum;
                             } else {
@@ -695,7 +756,7 @@ class VerifyTafPage extends Page implements HasActions
     {
         return Action::make('viewDetails')
             ->modalHeading(fn (array $arguments) => 'Detail Sandi Jam ' . ($arguments['time'] ?? ''))
-            ->modalSubmitAction(false) // Sembunyikan tombol submit karena cuma untuk melihat
+            ->modalSubmitAction(false)
             ->modalCancelActionLabel('Tutup')
             ->form([
                 \Filament\Forms\Components\Textarea::make('taf_raw')
@@ -708,7 +769,6 @@ class VerifyTafPage extends Page implements HasActions
                     ->rows(2),
             ])
             ->fillForm(function (array $arguments): array {
-                // Cari data berdasarkan jam yang diklik dari cache/property
                 $rows = $this->realtimeData['rows'] ?? [];
                 $targetTime = $arguments['time'] ?? '';
                 

@@ -58,7 +58,7 @@
         <x-filament::section icon="heroicon-o-shield-check" header="Quality Control Sandi TAFOR Sebelum Kirim">
             <div class="grid grid-cols-1 md:grid-cols-2 gap-8">
                 
-                <!-- Kiri: Form Input -->
+                <!-- Kiri: Form Input & Tombol Aksi -->
                 <div class="space-y-4">
                     <div>
                         <label class="flex items-center gap-2 text-sm font-bold mb-2">
@@ -69,13 +69,28 @@
                         </label>
                         <textarea wire:model.defer="rawTaf" rows="6" class="w-full rounded-lg border-gray-300 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-200 shadow-sm focus:border-primary-500 focus:ring-primary-500 text-sm font-mono leading-relaxed" placeholder="Ketik atau paste sandi TAFOR di sini...&#10;Contoh: FTID40 WITN 290500 CCA TAF COR..."></textarea>
                     </div>
-                    <div class="flex gap-3">
-                        <x-filament::button wire:click="checkQualityControl" color="primary" size="sm">
+                    
+                    <div class="flex flex-wrap items-center gap-3">
+                        <x-filament::button wire:click="checkQualityControl" color="primary" size="sm" icon="heroicon-m-magnifying-glass">
                             Verifikasi TAFOR
                         </x-filament::button>
-                        <x-filament::button wire:click="clearQualityControl" color="gray" size="sm">
-                            Bersihkan
-                        </x-filament::button>
+                        
+                        {{-- PERBAIKAN 3: Tombol Direct Send jika QC Valid --}}
+                        @if(!empty($qcResult))
+                            <x-filament::button 
+                                wire:click="sendTaf" 
+                                color="{{ ($qcResult['is_valid'] ?? false) ? 'success' : 'gray' }}" 
+                                size="sm" 
+                                icon="heroicon-m-paper-airplane"
+                                :disabled="!($qcResult['is_valid'] ?? false)"
+                            >
+                                Kirim Sandi (Send)
+                            </x-filament::button>
+
+                            <x-filament::button wire:click="clearQualityControl" color="gray" size="sm">
+                                Bersihkan
+                            </x-filament::button>
+                        @endif
                     </div>
                 </div>
 
@@ -89,7 +104,7 @@
                                 </div>
                                 <div>
                                     <span class="font-bold block text-base text-emerald-900 dark:text-emerald-400">Sandi TAF Valid</span>
-                                    <span class="opacity-90">Tidak ditemukan kesalahan penulisan format standar.</span>
+                                    <span class="opacity-90">Tidak ditemukan kesalahan penulisan format standar. Silakan klik <strong>Kirim Sandi (Send)</strong> untuk langsung mengirim.</span>
                                 </div>
                             @else
                                 <div style="width: 24px; height: 24px; flex-shrink: 0;">
@@ -97,7 +112,7 @@
                                 </div>
                                 <div>
                                     <span class="font-bold block text-base text-rose-900 dark:text-rose-400">Sandi TAF perlu diperbaiki</span>
-                                    <span class="opacity-90">Ditemukan <strong class="font-extrabold">{{ $qcResult['errors'] }}</strong> elemen yang tidak sesuai standar pengiriman.</span>
+                                    <span class="opacity-90">Ditemukan <strong class="font-extrabold">{{ $qcResult['errors'] }}</strong> parameter cuaca yang tidak sesuai standar pengiriman.</span>
                                 </div>
                             @endif
                         </div>
@@ -106,27 +121,33 @@
                             <table class="w-full text-sm text-left">
                                 <thead class="border-b dark:border-gray-700 bg-gray-50 dark:bg-gray-800">
                                     <tr>
-                                        <th class="p-3 border-r dark:border-gray-700 font-bold text-gray-900 dark:text-gray-200">Elemen</th>
+                                        {{-- PERBAIKAN 1: Penggunaan nama kolom Parameter Cuaca --}}
+                                        <th class="p-3 border-r dark:border-gray-700 font-bold text-gray-900 dark:text-gray-200">Parameter Cuaca</th>
                                         <th class="p-3 border-r dark:border-gray-700 font-bold text-gray-900 dark:text-gray-200">Aturan QC</th>
                                         <th class="p-3 font-bold text-gray-900 dark:text-gray-200">Keterangan</th>
                                     </tr>
                                 </thead>
                                 <tbody class="divide-y divide-gray-200 dark:divide-gray-700 bg-white dark:bg-gray-900">
                                     @foreach($qcResult['results'] as $res)
-                                        <tr class="{{ $res['is_valid'] ? 'text-gray-800 dark:text-gray-300' : 'bg-rose-50 dark:bg-rose-900/40 text-rose-800 dark:text-rose-300' }}">
-                                            <td class="p-3 border-r dark:border-gray-700 font-mono font-bold text-primary-600 dark:text-primary-400">{{ $res['element'] }}</td>
+                                        {{-- PERBAIKAN 2: Penanda Merah Mencolok untuk Parameter Cuaca yang Salah --}}
+                                        <tr class="{{ $res['is_valid'] ? 'text-gray-800 dark:text-gray-300' : 'bg-red-100 dark:bg-red-950/80 text-red-900 dark:text-red-200 font-semibold border-l-4 border-red-600' }}">
+                                            <td class="p-3 border-r dark:border-gray-700 font-mono font-bold {{ $res['is_valid'] ? 'text-primary-600 dark:text-primary-400' : 'text-red-700 dark:text-red-300' }}">
+                                                {{ $res['parameter_cuaca'] ?? $res['element'] }}
+                                            </td>
                                             <td class="p-3 border-r dark:border-gray-700 font-medium">{{ $res['rule'] }}</td>
                                             <td class="p-3 flex items-center gap-2.5 font-medium">
                                                 @if($res['is_valid'])
                                                     <div class="flex items-center justify-center w-5 h-5 rounded-full bg-emerald-100 dark:bg-emerald-900 text-emerald-600 dark:text-emerald-400 flex-shrink-0">
                                                         <x-heroicon-m-check style="width: 12px; height: 12px;"/>
                                                     </div>
+                                                    <span>{{ $res['remark'] }}</span>
                                                 @else
-                                                    <div class="flex items-center justify-center w-5 h-5 rounded-full bg-rose-100 dark:bg-rose-900 text-rose-600 dark:text-rose-400 flex-shrink-0">
-                                                        <x-heroicon-m-x-mark style="width: 12px; height: 12px;"/>
+                                                    <!-- Badge Merah Tegas & Jelas -->
+                                                    <div class="flex items-center justify-center px-2 py-0.5 rounded bg-red-600 text-white font-bold text-xs flex-shrink-0 shadow-sm">
+                                                        ✕ SALAH
                                                     </div>
+                                                    <span class="text-red-800 dark:text-red-200 font-semibold">{{ $res['remark'] }}</span>
                                                 @endif
-                                                {{ $res['remark'] }}
                                             </td>
                                         </tr>
                                     @endforeach
