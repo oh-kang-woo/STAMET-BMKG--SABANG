@@ -2,6 +2,7 @@
 
 namespace App\Filament\Pages;
 
+use App\Helpers\GtsMessageHelper;
 use App\Services\BmkgAviationApiService;
 use App\Services\BmkgsatuApiService;
 use App\Services\TafReportExcelService;
@@ -446,7 +447,7 @@ class VerifyTafPage extends Page implements HasActions
         ];
     }
 
-    // PERBAIKAN: Direct Send dengan Payload yang Divalidasi untuk API BMKG Satu v21
+    // PERBAIKAN: Direct Send menggunakan Helper Resmi Aplikasi (GtsMessageHelper)
     public function sendTaf(?BmkgsatuApiService $apiService = null): void
     {
         $apiService = $apiService ?? app(BmkgsatuApiService::class);
@@ -475,43 +476,15 @@ class VerifyTafPage extends Page implements HasActions
             $cleanTaf = trim(preg_replace('/\s+/', ' ', str_replace('=', ' = ', strtoupper($this->rawTaf))));
             $cleanTaf = trim(str_replace(' =', '=', $cleanTaf));
 
-            // Extract TTAAII (FTID40), CCCC (WITN), dan Waktu Penerbitan (DDHHMM)
-            preg_match('/^(FT[A-Z0-9]{4})\s+([A-Z]{4})(?:\s+(\d{2})(\d{2})(\d{2})Z?)?/i', $cleanTaf, $headerMatch);
-            
-            $ttaaii = !empty($headerMatch[1]) ? strtoupper($headerMatch[1]) : 'FTID40';
-            $cccc   = !empty($headerMatch[2]) ? strtoupper($headerMatch[2]) : $this->icao;
-
-            // Pastikan format ISO 8601 UTC berakhiran 'Z' (contoh: 2026-11-02T14:30:00Z)
-            $nowUtc = now('UTC');
-            if (!empty($headerMatch[3]) && !empty($headerMatch[4])) {
-                $day  = (int) $headerMatch[3];
-                $hour = (int) $headerMatch[4];
-                $min  = isset($headerMatch[5]) ? (int) $headerMatch[5] : 0;
-
-                $timestampData = $nowUtc->copy()
-                    ->day($day)
-                    ->setTime($hour, $min, 0)
-                    ->format('Y-m-d\TH:i:s\Z');
-            } else {
-                $timestampData = $nowUtc->format('Y-m-d\TH:i:s\Z');
-            }
-
-            $timestampSent = $nowUtc->format('Y-m-d\TH:i:s\Z');
-
-            // Konversi ID Stasiun WMO menjadi tipe data integer
-            $rawWmoId = setting('station_wmo_id');
-            $stationWmoId = (int) ($rawWmoId ?: 96011);
-
-            $payload = [
-                'type_message'        => 2, // 2 = ID Tipe Pesan GTS TAF
-                'station_wmo_id'      => $stationWmoId,
-                'sandi_gts'           => $cleanTaf,
-                'ttaaii'              => $ttaaii,
-                'cccc'                => $cccc,
-                'timestamp_data'      => $timestampData,
-                'timestamp_sent_data' => $timestampSent,
-                'need_ftp'            => 1,
+            // Susun data input pengiriman sesuai kriteria GtsMessageHelper (Type Message 6 = TAF)[cite: 14]
+            $gtsDataInput = [
+                'type_message'   => 6,
+                'sandi_gts'      => $cleanTaf,
+                'timestamp_data' => now()->toDateTimeString(),
             ];
+
+            // Mutasi data agar sesuai dengan spesifikasi payload endpoint API BMKG Satu v21[cite: 13, 14]
+            $payload = GtsMessageHelper::mutateGTSMessageDataBeforeSent($gtsDataInput);
 
             $response = $apiService->sendGtsMessage($payload);
 
