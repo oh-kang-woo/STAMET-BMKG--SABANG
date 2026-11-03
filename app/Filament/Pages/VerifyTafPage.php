@@ -447,7 +447,7 @@ class VerifyTafPage extends Page implements HasActions
         ];
     }
 
-    // PERBAIKAN: Direct Send menggunakan Helper Resmi Aplikasi (GtsMessageHelper)
+    // PERBAIKAN: Direct Send dengan Pemisah Ganti Baris (\n) antara Header dan TAF Body
     public function sendTaf(?BmkgsatuApiService $apiService = null): void
     {
         $apiService = $apiService ?? app(BmkgsatuApiService::class);
@@ -475,6 +475,11 @@ class VerifyTafPage extends Page implements HasActions
         try {
             $cleanTaf = trim(preg_replace('/\s+/', ' ', str_replace('=', ' = ', strtoupper($this->rawTaf))));
             $cleanTaf = trim(str_replace(' =', '=', $cleanTaf));
+
+            // PENTING: Pisahkan WMO Header (FTID40 WITN DDHHMM [BBB]) dengan baris sandi TAF menggunakan ganti baris (\n)
+            if (preg_match('/^([A-Z]{4}\d{2}\s+[A-Z]{4}\s+\d{6}(?:\s+(?:CC|AA)[A-Z])?)\s+(.*)/s', $cleanTaf, $matches)) {
+                $cleanTaf = $matches[1] . "\n" . $matches[2];
+            }
 
             // Susun data input pengiriman sesuai kriteria GtsMessageHelper (Type Message 6 = TAF)[cite: 14]
             $gtsDataInput = [
