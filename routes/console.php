@@ -13,8 +13,11 @@ use App\Services\AwosToAwsBridgeService;
 
 Schedule::command('queue:prune-batches')->daily();
 
-// Fetching data
-$fetchSinoptikMinute = setting('excel_server_sinoptik_creation_minute', 52);
+$isBridgeEnabled = filter_var(setting('bridge_awos_to_aws', false), FILTER_VALIDATE_BOOLEAN);
+
+// Fetching data (menit 52 jika AWS normal, menit 55 jika Bridge AWOS aktif)
+$defaultFetchMinute = (int) setting('excel_server_sinoptik_creation_minute', 52);
+$fetchSinoptikMinute = $isBridgeEnabled ? max(55, $defaultFetchMinute) : $defaultFetchMinute;
 Schedule::command('sinoptik:fetch-data')
     ->hourlyAt($fetchSinoptikMinute)
     ->runInBackground();
@@ -31,7 +34,7 @@ if (setting('bmkgsabang_sinoptik_fetch_screenshot', true)) {
         ->runInBackground();
 }
 
-// Bridge AWOS -> AWS setiap menit (fallback Excel & Sinoptik saat AWS kendala)
+// Bridge AWOS -> AWS setiap menit (aktif hanya jika saklar Bridge ON)
 Schedule::call(function () {
     $bridge = app(AwosToAwsBridgeService::class);
     if (!$bridge->isEnabled()) {
@@ -175,9 +178,10 @@ Schedule::command('sinoptik:fetch-data')
     ->hourlyAt(45)
     ->runInBackground();
 
-// Fill excel at server sinoptik, use default minute 50
+// Fill excel at server sinoptik (menit 51 jika AWS normal, menit 53 jika Bridge AWOS aktif)
+$sendAwsToExcelMinute = $isBridgeEnabled ? 53 : 51;
 Schedule::job(new SendDataAwsToServerSinoptikJob(DateHelper::getNearestSentHour()->toDateTimeString()))
-    ->hourlyAt(51);
+    ->hourlyAt($sendAwsToExcelMinute);
 
 // Delete old satellite images at 19 UTC
 Schedule::job(new DeleteOldWeatherImagesJob(['satelit', 'radar', 'himawari', 'streamline', 'cloud', 'seawave']))
