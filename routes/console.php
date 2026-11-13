@@ -8,6 +8,8 @@ use App\Jobs\FetchGtsMonitoringDataJob;
 use App\Jobs\FetchMonitoringSinoptikJob;
 use App\Jobs\FetchWeatherImageJob;
 use App\Jobs\SendDataAwsToServerSinoptikJob;
+use App\Models\DataAwos;
+use App\Services\AwosToAwsBridgeService;
 
 Schedule::command('queue:prune-batches')->daily();
 
@@ -28,6 +30,26 @@ if (setting('bmkgsabang_sinoptik_fetch_screenshot', true)) {
         ->everyMinute()
         ->runInBackground();
 }
+
+// Bridge AWOS -> AWS setiap menit (fallback Excel & Sinoptik saat AWS kendala)
+Schedule::call(function () {
+    $bridge = app(AwosToAwsBridgeService::class);
+    if (!$bridge->isEnabled()) {
+        return;
+    }
+
+    $recentAwos = DataAwos::orderByDesc('data_timestamp')
+        ->limit(5)
+        ->get()
+        ->reverse();
+
+    foreach ($recentAwos as $awos) {
+        $bridge->syncRecord($awos);
+    }
+})
+    ->name('bridge-awos-to-aws')
+    ->everyMinute()
+    ->withoutOverlapping();
 
 // =========================================================================
 // 1. GENERATE GTS MESSAGE (Dimajukan ke Menit 58 agar Siap Sebelum Menit 00)
