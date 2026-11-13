@@ -254,6 +254,13 @@ class Settings extends Page implements HasForms
                                             ->colors([true => 'info', false => 'warning'])
                                             ->grouped()
                                             ->options([1 => 'ON', 0 => 'OFF']),
+                                        ToggleButtons::make('bridge_awos_to_aws')
+                                            ->label('Bridge AWOS ke AWS (Fallback Excel/Sinoptik)')
+                                            ->helperText('Jika ON, data AWOS per menit otomatis dikonversi (QFE ke QFF 126m) ke tabel AWS.')
+                                            ->colors([true => 'info', false => 'warning'])
+                                            ->grouped()
+                                            ->options([1 => 'ON', 0 => 'OFF'])
+                                            ->default(0),
                                     ]),
 
                                 Section::make('Notifikasi Whatsapp')
