@@ -2,7 +2,9 @@
 
 namespace App\Providers;
 
+use App\Models\DataAwos;
 use App\Models\User;
+use App\Observers\DataAwosObserver;
 use App\Policies\TokenPolicy;
 use Rupadana\ApiService\Models\Token;
 use Illuminate\Support\Facades\Gate;
@@ -37,5 +39,7 @@ class AppServiceProvider extends ServiceProvider
         Gate::define('viewPulse', function (User $user) {
             return $user->isAdmin();
         });
+
+        DataAwos::observe(DataAwosObserver::class);
     }
 }
