@@ -336,9 +336,8 @@ class Settings extends Page implements HasForms
                         ->label('Konfirmasi')
                         ->required()
                         ->placeholder('Ketik CONFIRM')
-                        // 🛡️ FIXED: Menggunakan standardisasi callback validator penulisan mesin Laravel terbaru
                         ->rules([
-                            function (string $attribute, $value, Closure $fail) {
+                            fn (): Closure => function (string $attribute, $value, Closure $fail) {
                                 if ($value !== 'CONFIRM') {
                                     $fail('Ups, salah!');
                                 }
