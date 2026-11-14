@@ -55,26 +55,38 @@ Schedule::call(function () {
     ->withoutOverlapping();
 
 // =========================================================================
-// 1. GENERATE GTS MESSAGE (Dimajukan ke Menit 58 agar Siap Sebelum Menit 00)
+// 1. GENERATE GTS MESSAGE
+//    - Bridge ON : Menit 57 & 59 (setelah sinoptik:fetch-data menit 55)
+//    - Bridge OFF: Mengikuti offset bawaan (default menit 58)
 // =========================================================================
 if (setting('bmkgsabang_generate_sinoptik', true)) {
-    // Default offset dimajukan 2 menit (menit 58)
-    $sinoptikOffset = setting('bmkgsatu_sinoptik_creation_mode_offset', -2);
-    $sinoptikMinute = (60 + $sinoptikOffset) % 60;
+    if ($isBridgeEnabled) {
+        Schedule::command('gts:generate-sinoptik')
+            ->cron('57,59 * * * *')
+            ->runInBackground();
+    } else {
+        $sinoptikOffset = setting('bmkgsatu_sinoptik_creation_mode_offset', -2);
+        $sinoptikMinute = (60 + $sinoptikOffset) % 60;
 
-    Schedule::command('gts:generate-sinoptik')
-        ->hourlyAt($sinoptikMinute)
-        ->runInBackground();
+        Schedule::command('gts:generate-sinoptik')
+            ->hourlyAt($sinoptikMinute)
+            ->runInBackground();
+    }
 }
 
 if (setting('bmkgsabang_generate_metar', true)) {
-    // Default offset dimajukan 2 menit (menit 58)
-    $metarOffset = setting('bmkgsatu_metar_creation_mode_offset', -2);
-    $metarMinute = (60 + $metarOffset) % 60;
+    if ($isBridgeEnabled) {
+        Schedule::command('gts:generate-metar')
+            ->cron('57,59 * * * *')
+            ->runInBackground();
+    } else {
+        $metarOffset = setting('bmkgsatu_metar_creation_mode_offset', -2);
+        $metarMinute = (60 + $metarOffset) % 60;
 
-    Schedule::command('gts:generate-metar')
-        ->hourlyAt($metarMinute)
-        ->runInBackground();
+        Schedule::command('gts:generate-metar')
+            ->hourlyAt($metarMinute)
+            ->runInBackground();
+    }
 }
 
 if (setting('bmkgsabang_generate_wxrev', true)) {
@@ -106,8 +118,6 @@ if (setting('bmkgsabang_send_meteorologi_sinoptik', true)) {
         ->runInBackground();
 }
 
-// Send GTS Message automatically on-time
-// Send GTS Message automatically on-time
 // Send GTS Message automatically on-time
 if (setting('bmkgsabang_gts_send_pending_messages', true)) {
     Schedule::command('gts:send-pending-messages')
