@@ -27,21 +27,45 @@ class DataAws extends Model
         }
     }
 
-    private function calculateTbb($t, $rh, $td)
+    private function calculateTbb($t, $rh, $td): ?float
     {
-        $result = 0;
-        $tbb = $td;
+        $t = (float) $t;
+        $rh = (float) $rh;
+        $tbb = (float) $td;
 
-        while ($result <= $rh) {
-            $numerator = (6.11 * pow(10, (7.5 * $tbb) / (237.3 + $tbb))) - (0.7947 * ($t - $tbb));
-            $denominator = 6.11 * pow(10, (7.5 * $t) / (237.3 + $t));
-            $result = ($numerator / $denominator) * 100;
-
-            if ($result < $rh) {
-                $tbb += 0.1;
-            }
+        if (
+            !is_finite($t) ||
+            !is_finite($rh) ||
+            !is_finite($tbb) ||
+            $rh < 0 ||
+            $rh > 100 ||
+            $t <= -237.3 ||
+            $tbb <= -237.3
+        ) {
+            return null;
         }
 
-        return round($tbb, 1);
+        for ($i = 0; $i < 1000; $i++) {
+            $numerator = (6.11 * pow(10, (7.5 * $tbb) / (237.3 + $tbb))) - (0.7947 * ($t - $tbb));
+            $denominator = 6.11 * pow(10, (7.5 * $t) / (237.3 + $t));
+
+            if ($denominator == 0.0 || !is_finite($denominator)) {
+                return null;
+            }
+
+            $result = ($numerator / $denominator) * 100;
+
+            if (!is_finite($result)) {
+                return null;
+            }
+
+            if ($result >= $rh) {
+                return round($tbb, 1);
+            }
+
+            $tbb += 0.1;
+        }
+
+        return null;
     }
 }

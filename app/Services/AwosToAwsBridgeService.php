@@ -77,12 +77,25 @@ class AwosToAwsBridgeService
                 $payload['temp_max_c_tntntn'] = $awos->at_5m_c;
             }
 
-            return DataAws::updateOrCreate(
+            $aws = DataAws::updateOrCreate(
                 ['data_timestamp' => $awos->data_timestamp],
                 $payload
             );
+
+            Log::info('[AWOS-to-AWS Bridge] Synced successfully', [
+                'awos_id'        => $awos->id,
+                'aws_id'         => $aws->id,
+                'data_timestamp' => $awos->data_timestamp,
+            ]);
+
+            return $aws;
         } catch (\Throwable $e) {
-            Log::error('[AWOS-to-AWS Bridge] Gagal konversi data AWOS ID ' . $awos->id . ': ' . $e->getMessage());
+            Log::error('[AWOS-to-AWS Bridge] Failed', [
+                'awos_id'        => $awos->id,
+                'data_timestamp' => $awos->data_timestamp,
+                'exception'      => get_class($e),
+                'message'        => $e->getMessage(),
+            ]);
             return null;
         }
     }
@@ -95,6 +108,10 @@ class AwosToAwsBridgeService
     {
         if ($qfeMb === null || $tempAirC === null) {
             return null;
+        }
+
+        if (!is_finite($qfeMb) || !is_finite($tempAirC) || $tempAirC <= -273.15) {
+            throw new \InvalidArgumentException('Data QFE atau temperatur AWOS tidak valid.');
         }
 
         $h = (float) setting('station_elevation', self::STATION_ELEVATION_M);

@@ -52,7 +52,7 @@ Schedule::call(function () {
 })
     ->name('bridge-awos-to-aws')
     ->everyMinute()
-    ->withoutOverlapping();
+    ->withoutOverlapping(2);
 
 // =========================================================================
 // 1. GENERATE GTS MESSAGE
