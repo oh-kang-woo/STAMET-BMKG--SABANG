@@ -475,6 +475,33 @@ class SinoptikDataHelper
             $windSpeed = $wind['wind_speed_ff'];
             $windDir = $wind['wind_dir_deg_dd'];
 
+            // PERBAIKAN: Logika Kalkulasi Tmax dan Tmin 24 Jam
+            
+            // 1. Tmax (Periode: 12 UTC kemarin s/d 12 UTC hari ini)
+            $tmaxStartTime = $referenceTime->copy();
+            if ($tmaxStartTime->hour <= 12) {
+                $tmaxStartTime->subDay()->setTime(12, 0, 0);
+            } else {
+                $tmaxStartTime->setTime(12, 0, 0);
+            }
+            $calculatedTmax = \App\Models\DataAws::whereBetween('data_timestamp', [
+                $tmaxStartTime->format('Y-m-d H:i:s'), 
+                $referenceTime->format('Y-m-d H:i:s')
+            ])->max('temp_drybulb_c_tttttt');
+
+            // 2. Tmin (Periode: 00 UTC kemarin s/d 00 UTC hari ini)
+            $tminStartTime = $referenceTime->copy();
+            if ($tminStartTime->hour == 0) {
+                $tminStartTime->subDay()->setTime(0, 0, 0);
+            } else {
+                $tminStartTime->setTime(0, 0, 0);
+            }
+            $calculatedTmin = \App\Models\DataAws::whereBetween('data_timestamp', [
+                $tminStartTime->format('Y-m-d H:i:s'), 
+                $referenceTime->format('Y-m-d H:i:s')
+            ])->min('temp_drybulb_c_tttttt');
+
+            // Susun Payload
             $payload = [
                 'data_timestamp' => $dataTimestamp,
                 'wind_dir_deg_dd' => $windDir,
@@ -484,8 +511,11 @@ class SinoptikDataHelper
                 'temp_drybulb_c_tttttt' => $dataAws->temp_drybulb_c_tttttt,
                 'temp_dewpoint_c_tdtdtd' => $dataAws->temp_dewpoint_c_tdtdtd,
                 'temp_wetbulb_c' => $tempWetBulb,
-                'temp_max_c_txtxtx' => $dataAws->temp_max_c_txtxtx,
-                'temp_min_c_tntntn' => $dataAws->temp_min_c_tntntn,
+                
+                // PERBAIKAN: Ganti data suhu AWS per menit dengan hasil pencarian MAX/MIN 24 Jam
+                'temp_max_c_txtxtx' => $calculatedTmax ?? $dataAws->temp_drybulb_c_tttttt, // Fallback ke suhu saat ini jika data kosong
+                'temp_min_c_tntntn' => $calculatedTmin ?? $dataAws->temp_drybulb_c_tttttt, // Fallback ke suhu saat ini jika data kosong
+                
                 'relative_humidity_pc' => $dataAws->relative_humidity_pc,
                 'created_by' => $userId ?? null,
                 

@@ -64,18 +64,21 @@ class AwosToAwsBridgeService
                 // temp_wetbulb_c otomatis dihitung oleh DataAws::booted() saat record disimpan
             ];
 
-            // Penanganan defensif untuk inkonsistensi nama kolom suhu min/max di schema AWS
-            if (Schema::hasColumn('data_aws', 'temp_max_c_txtxtx')) {
-                $payload['temp_max_c_txtxtx'] = $awos->at_5m_c;
-            } elseif (Schema::hasColumn('data_aws', 'temp_min_c_txtxtx')) {
-                $payload['temp_min_c_txtxtx'] = $awos->at_5m_c;
-            }
+            // PERBAIKAN: Menghapus pemetaan yang salah dari AWOS ke Tmax dan Tmin
+            // Karena nilai ini seharusnya dicari dari agregat 24 jam (di SinoptikDataHelper), 
+            // bukan diset setiap menit dari suhu sesaat.
+            
+            // if (Schema::hasColumn('data_aws', 'temp_max_c_txtxtx')) {
+            //     $payload['temp_max_c_txtxtx'] = $awos->at_5m_c;
+            // } elseif (Schema::hasColumn('data_aws', 'temp_min_c_txtxtx')) {
+            //     $payload['temp_min_c_txtxtx'] = $awos->at_5m_c;
+            // }
 
-            if (Schema::hasColumn('data_aws', 'temp_min_c_tntntn')) {
-                $payload['temp_min_c_tntntn'] = $awos->at_5m_c;
-            } elseif (Schema::hasColumn('data_aws', 'temp_max_c_tntntn')) {
-                $payload['temp_max_c_tntntn'] = $awos->at_5m_c;
-            }
+            // if (Schema::hasColumn('data_aws', 'temp_min_c_tntntn')) {
+            //     $payload['temp_min_c_tntntn'] = $awos->at_5m_c;
+            // } elseif (Schema::hasColumn('data_aws', 'temp_max_c_tntntn')) {
+            //     $payload['temp_max_c_tntntn'] = $awos->at_5m_c;
+            // }
 
             $aws = DataAws::updateOrCreate(
                 ['data_timestamp' => $awos->data_timestamp],
