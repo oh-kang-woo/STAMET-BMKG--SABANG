@@ -11,7 +11,6 @@ use Illuminate\Foundation\Bus\Dispatchable;
 use Illuminate\Queue\InteractsWithQueue;
 use Illuminate\Queue\SerializesModels;
 
-
 class SendDataAwsToServerSinoptikJob implements ShouldQueue
 {
     use Dispatchable, InteractsWithQueue, Queueable, SerializesModels;
@@ -47,7 +46,7 @@ class SendDataAwsToServerSinoptikJob implements ShouldQueue
                 $this->sendNotification($this->userId, true);
             } else {
                 $errorMessage = $response['detail'] ?? "Gagal mengirim data AWS {$this->timestamp} ke excel.";
-                logger("Gagal mengirim data AWS ke server sinoptik {$this->timestamp}");
+                logger("Gagal mengirim data AWS ke server sinoptik {$this->timestamp}: {$errorMessage}");
                 $this->sendNotification($this->userId, false, $errorMessage);
             }
         } catch (\Throwable $e) {
@@ -56,7 +55,6 @@ class SendDataAwsToServerSinoptikJob implements ShouldQueue
             throw $e;
         }
     }
-
 
     protected function sendNotification($userId, $success = true, $message = ''): void
     {
@@ -76,6 +74,7 @@ class SendDataAwsToServerSinoptikJob implements ShouldQueue
         } else {
             Notification::make()
                 ->title("Terjadi kesalahan saat mengirim data AWS {$this->timestamp} ke server sinoptik")
+                ->body($message)
                 ->danger()
                 ->duration(10000)
                 ->broadcast($user);

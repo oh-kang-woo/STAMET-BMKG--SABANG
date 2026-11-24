@@ -25,18 +25,44 @@ class SinoptikDataHelper
 
     public static function calculateTempWetBulb(float $tempDryBulb, float $relativeHumidity, float $tempDewPoint): float
     {
+        // Jika RH >= 100%, suhu bola basah sama dengan suhu bola kering
+        if ($relativeHumidity >= 100) {
+            return round($tempDryBulb, 1);
+        }
+
+        // Jika RH <= 0%, kembalikan titik embun
+        if ($relativeHumidity <= 0) {
+            return round($tempDewPoint, 1);
+        }
+
         $result = 0;
         $tempWetBulb = $tempDewPoint;
+        $maxIterations = 1000;
+        $iterations = 0;
 
-        while ($result <= $relativeHumidity) {
+        $esDry = 6.11 * pow(10, (7.5 * $tempDryBulb) / (237.3 + $tempDryBulb));
+
+        // Pengaman pembagian dengan nol
+        if ($esDry == 0) {
+            return round($tempWetBulb, 1);
+        }
+
+        while ($result < $relativeHumidity && $iterations < $maxIterations) {
             $esWet = 6.11 * pow(10, (7.5 * $tempWetBulb) / (237.3 + $tempWetBulb));
-            $esDry = 6.11 * pow(10, (7.5 * $tempDryBulb) / (237.3 + $tempDryBulb));
 
             $result = (($esWet - (0.7947 * ($tempDryBulb - $tempWetBulb))) / $esDry) * 100;
 
             if ($result < $relativeHumidity) {
                 $tempWetBulb += 0.1;
             }
+
+            // Pengaman agar suhu bola basah tidak melebihi suhu bola kering
+            if ($tempWetBulb >= $tempDryBulb) {
+                $tempWetBulb = $tempDryBulb;
+                break;
+            }
+
+            $iterations++;
         }
 
         return round($tempWetBulb, 1);
@@ -464,7 +490,24 @@ class SinoptikDataHelper
                 return ['status' => 'error', 'detail' => "Data AWS menit ke-{$minute} tidak ditemukan."];
             }
 
-            $tempWetBulb = static::calculateTempWetBulb($dataAws->temp_drybulb_c_tttttt, $dataAws->relative_humidity_pc, $dataAws->temp_dewpoint_c_tdtdtd);
+            // Validasi data suhu, RH, dan titik embun agar tidak TypeError jika ada yang NULL
+            if (
+                is_null($dataAws->temp_drybulb_c_tttttt) ||
+                is_null($dataAws->relative_humidity_pc) ||
+                is_null($dataAws->temp_dewpoint_c_tdtdtd)
+            ) {
+                logger("Data AWS menit ke-{$minute} tidak lengkap (T/RH/Td ada yang kosong).");
+                return [
+                    'status' => 'error',
+                    'detail' => "Data AWS menit ke-{$minute} tidak lengkap (Suhu/RH/Titik Embun kosong)."
+                ];
+            }
+
+            $tempWetBulb = static::calculateTempWetBulb(
+                (float) $dataAws->temp_drybulb_c_tttttt,
+                (float) $dataAws->relative_humidity_pc,
+                (float) $dataAws->temp_dewpoint_c_tdtdtd
+            );
 
             $wind = static::normalizeWindData(
                 $dataAws->wind_speed_ff,
